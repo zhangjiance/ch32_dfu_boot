@@ -22,8 +22,40 @@
 #include "dfu_port.h"
 
 static uint32_t s_dfu_addr;
-static uint32_t s_last_erased_sector = 0xFFFFFFFFU;
+/*
+ * Flash already erased in this DFU session, as a half-open window [base, end).
+ *
+ * It has to be a window rather than "the last sector erased": dfu-util first
+ * erases every sector of the element and then, in its second pass, sends
+ * SET_ADDRESS before each 4 KB chunk.  Remembering only the last sector meant
+ * the first write of every chunk re-erased a sector that had just been erased,
+ * doubling the erase time (and the flash wear).
+ */
+static uint32_t s_erased_base;
+static uint32_t s_erased_end;
 static volatile bool s_reboot_pending;
+
+static bool range_is_erased(uint32_t addr, uint32_t len)
+{
+    return (s_erased_end > s_erased_base) &&
+           (addr >= s_erased_base) && ((addr + len) <= s_erased_end);
+}
+
+static void note_range_erased(uint32_t base, uint32_t end)
+{
+    if (!(s_erased_end > s_erased_base) || (base > s_erased_end)) {
+        /* Nothing erased yet, or a fresh range above the window: start over. */
+        s_erased_base = base;
+        s_erased_end = end;
+        return;
+    }
+    if (base < s_erased_base) {
+        s_erased_base = base;
+    }
+    if (end > s_erased_end) {
+        s_erased_end = end;
+    }
+}
 
 bool dfu_reboot_pending(void)
 {
@@ -48,7 +80,8 @@ static uint32_t erase_mask(void)
 void usbd_dfu_begin_load(void)
 {
     s_dfu_addr = boot_flash_app_start();
-    s_last_erased_sector = 0xFFFFFFFFU;
+    s_erased_base = 0U;
+    s_erased_end = 0U;
     BOOT_PRINTF("[DFU] begin load, base 0x%08lX\r\n", (unsigned long)s_dfu_addr);
 }
 
@@ -80,8 +113,11 @@ int usbd_dfu_write(uint16_t value, const uint8_t *data, uint16_t length)
         addr = rd_le32(data + 1);
 
         if (data[0] == DFU_SPECIAL_CMD_SET_ADDRESS_POINTER) {
+            /* Note this deliberately keeps s_erased_base/s_erased_end: the host
+             * sends SET_ADDRESS again before every 4 KB chunk of the write pass,
+             * and forgetting the erased window here made every chunk erase its
+             * sector a second time. */
             s_dfu_addr = addr;
-            s_last_erased_sector = 0xFFFFFFFFU;
             return 0;
         }
         if (data[0] == DFU_SPECIAL_CMD_ERASE) {
@@ -92,7 +128,7 @@ int usbd_dfu_write(uint16_t value, const uint8_t *data, uint16_t length)
                 return 1;
             }
             s_dfu_addr = addr;
-            s_last_erased_sector = sector;
+            note_range_erased(sector, sector + boot_flash_erase_size());
             BOOT_PRINTF("[DFU] erase 0x%08lX\r\n", (unsigned long)addr);
             boot_board_led_toggle();
             return 0;
@@ -112,12 +148,13 @@ int usbd_dfu_write(uint16_t value, const uint8_t *data, uint16_t length)
         }
 
         /* Works with or without an explicit DfuSe ERASE: erase each sector the
-         * first time a write lands in it (dfu-util programs sequentially). */
-        if (sector != s_last_erased_sector) {
+         * first time a write lands in it (dfu-util programs sequentially).  When
+         * the host already erased it in its erase pass this is skipped. */
+        if (!range_is_erased(addr, length)) {
             if (boot_flash_erase(sector, boot_flash_erase_size()) != 0) {
                 return 1;
             }
-            s_last_erased_sector = sector;
+            note_range_erased(sector, sector + boot_flash_erase_size());
         }
 
         if (boot_flash_write(addr, data, length) != 0) {
