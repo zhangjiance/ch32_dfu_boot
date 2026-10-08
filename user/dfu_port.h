@@ -17,6 +17,16 @@ extern "C" {
  * the freshly programmed application.  Polled from main(). */
 bool dfu_reboot_pending(void);
 
+/* Arm that reboot.  Called from the DFU class glue when the host issues the
+ * DfuSe "leave request" (a zero length DNLOAD) or DFU_DETACH.
+ *
+ * For a plain dfu-util session nothing else ever reaches usbd_dfu_reset() --
+ * the CherryUSB class only calls it for a GETSTATUS in dfuMANIFEST_WAIT_RESET,
+ * which DfuSe hosts never poll.  Without this the device would stay in
+ * dfuMANIFEST_SYNC after the image is complete and the host would hang in its
+ * leave hand-shake. */
+void dfu_request_reboot(void);
+
 #ifdef __cplusplus
 }
 #endif

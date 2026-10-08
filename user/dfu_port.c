@@ -59,6 +59,11 @@ void usbd_dfu_end_load(void)
 
 void usbd_dfu_reset(void)
 {
+    dfu_request_reboot();
+}
+
+void dfu_request_reboot(void)
+{
     /* Manifestation finished: leave DFU mode by rebooting into the new image.
      * Flagged here (control-transfer context) and actioned from main(). */
     s_reboot_pending = true;

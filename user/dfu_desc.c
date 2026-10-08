@@ -12,6 +12,7 @@
 #include "boot_log.h"
 #include "boot_protocol.h"
 #include "boot_flash_port.h"
+#include "dfu_port.h"
 #include "usb_config.h"
 
 #include <stdio.h>
@@ -26,8 +27,12 @@ static char flash_desc_str[64];
 /* ------------------------------------------------------------------ *
  * Device / configuration descriptors
  * ------------------------------------------------------------------ */
+/* bcdDevice is bumped on every functional change: 'dfu-util -l' prints it as
+ * ver=xxxx, which makes it obvious which firmware a board is running. */
+#define USBD_BCD_DEVICE 0x0201
+
 static const uint8_t device_descriptor[] = {
-    USB_DEVICE_DESCRIPTOR_INIT(USB_2_0, 0x00, 0x00, 0x00, USBD_VID, USBD_PID, 0x0200, 0x01)
+    USB_DEVICE_DESCRIPTOR_INIT(USB_2_0, 0x00, 0x00, 0x00, USBD_VID, USBD_PID, USBD_BCD_DEVICE, 0x01)
 };
 
 static const uint8_t config_descriptor[] = {
@@ -112,7 +117,25 @@ static const uint8_t msos_compat_id[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-#define MSOS_EXT_PROP_LEN (0x92U)
+/*
+ * MS OS 1.0 "ExtProp" descriptor: a 10 byte header plus one feature-descriptor
+ * section carrying the DeviceInterfaceGUIDs property.
+ *
+ * Windows reads it with a vendor request (bRequest = DFU_WINUSB_VENDOR_CODE,
+ * wIndex = 5) right after the device is configured, and it takes the response
+ * length from the first four bytes of this buffer.  A dwLength that does not
+ * cover every byte written truncates the descriptor (Windows then drops the
+ * property), so the layout is spelled out here and used by the builder below:
+ *
+ *   header (10) + section (4 + 4 + 2 + 40 + 4 + 80 = 134) = 144
+ */
+#define MSOS_PROP_NAME        "DeviceInterfaceGUIDs"
+#define MSOS_PROP_NAME_BYTES  ((uint32_t)sizeof(MSOS_PROP_NAME) * 2U)
+/* REG_MULTI_SZ payload: the GUID string, its own NUL, and the list's NUL. */
+#define MSOS_PROP_DATA_BYTES  (((uint32_t)sizeof(DFU_INTERFACE_GUID) - 1U + 2U) * 2U)
+#define MSOS_PROP_SECTION_LEN (4U + 4U + 2U + MSOS_PROP_NAME_BYTES + 4U + MSOS_PROP_DATA_BYTES)
+#define MSOS_EXT_PROP_LEN     (10U + MSOS_PROP_SECTION_LEN)
+
 static uint8_t msos_ext_prop[MSOS_EXT_PROP_LEN];
 
 static const uint8_t msos_ext_prop_empty[] = {
@@ -133,16 +156,14 @@ static const struct usb_msosv1_descriptor dfu_msosv1 = {
 
 static void msos_ext_prop_build(void)
 {
-    static const char prop_name[] = "DeviceInterfaceGUIDs";
+    static const char prop_name[] = MSOS_PROP_NAME;
     static const char guid[] = DFU_INTERFACE_GUID;
-    const uint32_t name_bytes = (uint32_t)sizeof(prop_name) * 2U;
-    const uint32_t data_bytes = ((uint32_t)sizeof(guid) + 1U) * 2U;
-    const uint32_t section_len = 4U + 4U + 2U + name_bytes + 4U + data_bytes;
     uint32_t p = 0U;
     uint32_t i;
 
-    msos_ext_prop[p++] = (uint8_t)(10U + section_len);
-    msos_ext_prop[p++] = (uint8_t)((10U + section_len) >> 8);
+    /* dwLength / wVersion(0x0100) / wIndex(0x0005) / wCount(1) */
+    msos_ext_prop[p++] = (uint8_t)(MSOS_EXT_PROP_LEN);
+    msos_ext_prop[p++] = (uint8_t)(MSOS_EXT_PROP_LEN >> 8);
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
@@ -152,31 +173,38 @@ static void msos_ext_prop_build(void)
     msos_ext_prop[p++] = 0x01U;
     msos_ext_prop[p++] = 0x00U;
 
-    msos_ext_prop[p++] = (uint8_t)(section_len);
-    msos_ext_prop[p++] = (uint8_t)(section_len >> 8);
+    /* dwSize / dwPropertyDataType(REG_MULTI_SZ) / wPropertyNameLength */
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_SECTION_LEN);
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_SECTION_LEN >> 8);
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x07U;   /* REG_MULTI_SZ */
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
-    msos_ext_prop[p++] = (uint8_t)(name_bytes);
-    msos_ext_prop[p++] = (uint8_t)(name_bytes >> 8);
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_NAME_BYTES);
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_NAME_BYTES >> 8);
 
+    /* bPropertyName, UTF-16LE (NUL included by sizeof) */
     for (i = 0U; i < (uint32_t)sizeof(prop_name); i++) {
         msos_ext_prop[p++] = (uint8_t)prop_name[i];
         msos_ext_prop[p++] = 0x00U;
     }
 
-    msos_ext_prop[p++] = (uint8_t)(data_bytes);
-    msos_ext_prop[p++] = (uint8_t)(data_bytes >> 8);
+    /* dwPropertyDataLength */
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_DATA_BYTES);
+    msos_ext_prop[p++] = (uint8_t)(MSOS_PROP_DATA_BYTES >> 8);
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
 
-    for (i = 0U; i < (uint32_t)sizeof(guid); i++) {
+    /* bPropertyData, UTF-16LE GUID */
+    for (i = 0U; i < (uint32_t)(sizeof(guid) - 1U); i++) {
         msos_ext_prop[p++] = (uint8_t)guid[i];
         msos_ext_prop[p++] = 0x00U;
     }
+    /* REG_MULTI_SZ terminator: end of the string, then end of the list. */
+    msos_ext_prop[p++] = 0x00U;
+    msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
     msos_ext_prop[p++] = 0x00U;
 
@@ -215,6 +243,8 @@ static usbd_request_handler dfu_class_handler;
 static int dfu_intf_handler(uint8_t busid, struct usb_setup_packet *setup,
                             uint8_t **data, uint32_t *len)
 {
+    int ret;
+
     if (usbd_dfu_get_state() == DFU_STATE_DFU_MANIFEST_WAIT_RESET) {
         static uint8_t getstatus[6] = { DFU_STATUS_OK, 0, 0, 0,
                                         DFU_STATE_DFU_MANIFEST_WAIT_RESET, 0 };
@@ -224,19 +254,43 @@ static int dfu_intf_handler(uint8_t busid, struct usb_setup_packet *setup,
             case DFU_REQUEST_GETSTATUS:
                 *data = getstatus;
                 *len = sizeof(getstatus);
+                /* Same effect the class would have had: leave DFU mode. */
+                dfu_request_reboot();
                 return 0;
             case DFU_REQUEST_GETSTATE:
                 *data = &getstate;
                 *len = 1;
                 return 0;
             case DFU_REQUEST_DETACH:
-                /* The host asked us to leave: main() resets shortly. */
+                /* The host asked us to leave. */
+                dfu_request_reboot();
                 return 0;
             default:
                 break;
         }
     }
-    return dfu_class_handler(busid, setup, data, len);
+
+    ret = dfu_class_handler(busid, setup, data, len);
+
+    /*
+     * DfuSe "leave request": a DNLOAD with no payload (dfuse.c sends it with
+     * wValue = 2).  That is the only point at which dfu-util tells the device
+     * the image is complete, and for a plain dfu-util session nothing else ever
+     * calls usbd_dfu_reset() (the class does so only for a GETSTATUS in
+     * dfuMANIFEST_WAIT_RESET, which DfuSe hosts never poll).  Without arming the
+     * reboot here the device stays in dfuMANIFEST_SYNC with the image already
+     * written, and dfu-util hangs on "Submitting leave request...".
+     *
+     * wValue != 0 keeps a stray zero-length DNLOAD from being mistaken for a
+     * leave (the DFU spec numbers the manifest trigger after the last block).
+     */
+    if ((setup->bRequest == DFU_REQUEST_DNLOAD) && (setup->wLength == 0U) &&
+        (setup->wValue != 0U)) {
+        BOOT_PRINTF("[DFU] leave request, rebooting\r\n");
+        dfu_request_reboot();
+    }
+
+    return ret;
 }
 
 static void usbd_event_handler(uint8_t busid, uint8_t event)
@@ -252,16 +306,27 @@ static void usbd_event_handler(uint8_t busid, uint8_t event)
 
 void dfu_boot_init(uint8_t busid, uintptr_t reg_base)
 {
-    /* DfuSe memory layout: "@Internal Flash /0x<addr>/<n>*<size>Kg".
-     * The sector size comes from the flash port's erase granularity. */
+    /* DfuSe memory layout: "@Internal Flash /0x<addr>/<n>*<size>K<type>".
+     * The sector size comes from the flash port's erase granularity.
+     *
+     * The trailing type letter is a bit mask (dfu-util reads "memtype & 7";
+     * 1 = readable, 2 = erasable, 4 = writable), so 'g' (0x67 & 7 = 7) means
+     * readable + erasable + writable: the host erases every target page itself
+     * before it starts downloading.  'M' (0x4D & 7 = 5) is the same except not
+     * erasable, which makes the host skip that erase pass -- the firmware
+     * erases a sector whenever a write lands in it (dfu_port.c) either way, so
+     * the letter can be switched if the host-side erase pass is ever a problem.
+     */
+#define BOOT_DFUSE_SEGMENT_TYPE 'g'
     uint32_t erase = boot_flash_erase_size();
     uint32_t sectors = boot_flash_app_size() / erase;
 
     (void)snprintf(flash_desc_str, sizeof(flash_desc_str),
-                   "@Internal Flash /0x%08lX/%lu*%03luKg",
+                   "@Internal Flash /0x%08lX/%lu*%03luK%c",
                    (unsigned long)boot_flash_app_start(),
                    (unsigned long)sectors,
-                   (unsigned long)(erase / 1024U));
+                   (unsigned long)(erase / 1024U),
+                   BOOT_DFUSE_SEGMENT_TYPE);
 
     msos_ext_prop_build();
 
