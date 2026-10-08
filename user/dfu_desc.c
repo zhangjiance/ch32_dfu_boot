@@ -25,6 +25,9 @@
 /* Runtime-generated DfuSe memory layout string (iInterface = 4). */
 static char flash_desc_str[64];
 
+/* Serial number from the CH32V30x unique id (0x1FFFF7E8), filled at init. */
+static char serial_string[25];
+
 /* ------------------------------------------------------------------ *
  * Device / configuration descriptors
  * ------------------------------------------------------------------ */
@@ -73,11 +76,24 @@ static const uint8_t *device_quality_descriptor_cb(uint8_t speed)
     return device_quality_descriptor;
 }
 
+static void build_serial_string(void)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    const uint8_t *uid = (const uint8_t *)0x1FFFF7E8UL;
+    uint32_t i;
+
+    for (i = 0U; i < 12U; i++) {
+        serial_string[i * 2U] = hex[(uid[i] >> 4) & 0x0FU];
+        serial_string[(i * 2U) + 1U] = hex[uid[i] & 0x0FU];
+    }
+    serial_string[24] = '\0';
+}
+
 static const char *string_descriptors[] = {
     (const char[]){ 0x09, 0x04 },   /* Langid 0x0409 */
     "CH32V30x",                     /* Manufacturer */
     "CH32V30x DFU Bootloader",      /* Product */
-    "CH32DFU0001",                  /* Serial number */
+    serial_string,                  /* Serial number */
     flash_desc_str,                 /* iInterface 4: DfuSe memory layout */
 };
 
@@ -329,6 +345,7 @@ void dfu_boot_init(uint8_t busid, uintptr_t reg_base)
                    (unsigned long)(erase / 1024U),
                    BOOT_DFUSE_SEGMENT_TYPE);
 
+    build_serial_string();
     msos_ext_prop_build();
 
     usbd_desc_register(busid, &dfu_descriptor);
