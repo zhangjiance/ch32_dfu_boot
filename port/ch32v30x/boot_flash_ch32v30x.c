@@ -3,10 +3,9 @@
  *
  * CH32V30x internal-flash implementation of the boot_flash_port interface.
  *
- * Uses the WCH "fast" page mode (page = 256 bytes), the same primitives
- * ch32v305_uf2 uses.  The flash controller must not be clocked above its
- * rating, so the core clock is halved for the duration of every erase/program
- * (RCC_HPRE_DIV2), exactly as bootuf2_flash_write() does.
+ * Uses the WCH "fast" page mode (page = 256 bytes).  The flash controller must
+ * not be clocked above its rating, so the core clock is halved for the duration
+ * of every erase/program (RCC_HPRE_DIV2).
  */
 #include "boot_flash_port.h"
 #include "boot_protocol.h"

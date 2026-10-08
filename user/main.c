@@ -3,7 +3,7 @@
  *
  * CH32V30x DFU bootloader entry point.
  *
- * Power-on flow (ported from hpm_dfu_boot/src/main.c):
+ * Power-on flow:
  *   1. board bring-up (boards/boot_board.c + the selected board_config.h)
  *   2. boot_check_and_run_app(): button / DFU request / APP signature
  *      -> never returns when the application is booted
@@ -53,8 +53,8 @@ int main(void)
      * device still shows up in the device list, yet the first control transfer
      * after the (re)enumeration fails, and only the next one succeeds
      * (dfu-util reports "Failed to retrieve language identifiers" /
-     * "Could not read name, sscanf returned 0").  ch32v305_uf2/goto_app()
-     * documents the same failure mode and settles >10 ms for it.
+     * "Could not read name, sscanf returned 0").  Settling for >10 ms before the
+     * re-enumeration avoids it.
      */
     boot_usb_port_deinit();
     Delay_Ms(50);

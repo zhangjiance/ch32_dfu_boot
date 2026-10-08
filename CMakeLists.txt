@@ -9,17 +9,16 @@ cmake_minimum_required(VERSION 3.22)
 #   port/<chip>/       flash + hand-shake + USB device controller glue
 #   user/              chip/board agnostic firmware (entry, descriptors, DFU)
 #
-# Framework modelled on ch32v307_led (SDK layout), USB integration on
-# ch32v305_uf2 (CherryUSB + CH32V30x USBHS), boot logic on hpm_dfu_boot.
+# Peripheral library in the WCH SDK layout, USB through CherryUSB with the
+# CH32V30x USBHS device controller, boot core free of chip/board specifics.
 # ==============================================================================
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
-# The CH32V305/307 USBHS block runs in high speed, same as ch32v305_uf2 /
-# ch32v305_bmp.  The descriptor selected for the negotiated speed depends on
-# it, so the define must match the wiring.
+# The CH32V305/307 USBHS block runs in high speed.  The descriptor selected for
+# the negotiated speed depends on it, so the define must match the wiring.
 add_compile_definitions(-DCONFIG_USB_HS)
 
 if(NOT CMAKE_BUILD_TYPE)

@@ -41,10 +41,10 @@
 /* ------------------------------------------------------------------ *
  * APP -> boot hand-shake
  *
- * CH32V30x has no HPM-style BGPR/PDGO retention register, so the request is
- * kept in a BKP data register which survives a software reset (but not a
- * power cycle).  The application writes BOOT_TRIGGER_MAGIC before resetting;
- * the bootloader reads and clears it.  The concrete access lives in
+ * CH32V30x has no general-purpose retention register in a backup domain, so the
+ * request is kept in a BKP data register which survives a software reset (but
+ * not a power cycle).  The application writes BOOT_TRIGGER_MAGIC before
+ * resetting; the bootloader reads and clears it.  The concrete access lives in
  * port/<chip>/boot_trigger_<chip>.c.
  * ------------------------------------------------------------------ */
 #define BOOT_TRIGGER_BKP_DR  ((uint16_t)0x0004) /* == BKP_DR1 (ch32v30x_bkp.h) */

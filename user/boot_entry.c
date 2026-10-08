@@ -1,8 +1,7 @@
 /*
  * boot_entry.c
  *
- * Boot entry decision, ported from hpm_dfu_boot/src/hpm_dfu_trigger.c but
- * split so that it stays chip/board agnostic:
+ * Boot entry decision, kept chip/board agnostic:
  *
  *   1. boot button held          -> stay in DFU
  *   2. DFU request from the APP  -> stay in DFU   (boot_trigger_port)
@@ -35,7 +34,7 @@ bool boot_app_is_valid(void)
 }
 
 /* Runs in the software-interrupt context so the jump does not depend on the
- * caller's stack frame (same mechanism ch32v305_uf2 uses). */
+ * caller's stack frame). */
 void SW_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void SW_Handler(void)
 {

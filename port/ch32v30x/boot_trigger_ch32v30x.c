@@ -3,7 +3,7 @@
  *
  * CH32V30x implementation of the cross-reset DFU request.
  *
- * HPM uses BGPR/PDGO retention registers; CH32V30x has none, so a
+ * CH32V30x has no general-purpose retention register in a backup domain, so a
  * battery-backed BKP data register is used.  It survives NVIC_SystemReset()
  * and is cleared by a power cycle (which is fine: after a power cycle the
  * bootloader re-evaluates the boot pin / application signature anyway).

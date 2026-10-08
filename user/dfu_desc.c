@@ -2,8 +2,9 @@
  * ch32_dfu_desc.c
  *
  * USB DFU descriptors + init for the CH32V30x DFU bootloader.
- * Ported from hpm_dfu_boot/src/dfu_desc.c (DfuSe single-alt-setting, plus the
- * MS OS 1.0/WCID descriptors so Windows binds WinUSB to the DFU interface).
+ *
+ * DfuSe with a single alternate setting, plus MS OS 1.0/WCID descriptors so
+ * Windows binds WinUSB to the DFU interface.
  */
 #include "usbd_core.h"
 #include "usbd_dfu.h"
