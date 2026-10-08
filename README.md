@@ -1,57 +1,65 @@
 # ch32_dfu_boot
 
-基于 **CherryUSB** 的 **CH32V30x USB DFU 引导程序（DfuSe）**。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-配套 APP 见同级工程 **`ch32_hello_world`**（点灯 + DFU runtime + CDC ACM + 按键进 boot）。
+A **CH32V30x USB DFU bootloader (DfuSe)** built on **CherryUSB**.
+
+Companion **application images** link at `0x00008000` (the application partition) and
+come back here with `dfu-util -e` through their DFU runtime interface, or by holding
+the BOOT button on boards that have one.
 
 ---
 
-## 设计目标与分层
+## Design goals and layering
 
-Boot 需要面向**多个硬件 / 未来多个 CH32 芯片**，因此从一开始就做了分层解耦：
+The bootloader has to serve **several boards and, later, several CH32 chips**, so it
+is decoupled from the start:
 
-| 层 | 目录 | 职责 | 换硬件 | 换芯片 |
+| Layer | Directory | Responsibility | New board | New chip |
 | --- | --- | --- | --- | --- |
-| 契约 | `shared/` | 分区布局、握手指令（SDK 无关） | 不变 | 不变 |
-| 板级 | `boards/<board>/board_config.h` + `boards/boot_board.c` | 时钟/串口/按键/LED | **只加一个头文件** | 不变 |
-| 芯片端口 | `port/<chip>/` | flash 擦写、跨复位握手、USB 底层 | 不变 | **只加一个目录** |
-| 固件 | `user/` | 启动判定、DFU 描述符、DfuSe 适配 | 不变 | 不变 |
-| USB 栈 | `third_party_components/CherryUSB`（子仓） | 设备栈 + DFU 类 | — | — |
+| Contract | `shared/` | partition layout, hand-shake (SDK independent) | unchanged | unchanged |
+| Board | `boards/<board>/board_config.h` + `boards/boot_board.c` | clock/UART/button/LED | **one header** | unchanged |
+| Chip port | `port/<chip>/` | flash erase/write, cross-reset hand-shake, USB low level | unchanged | **one directory** |
+| Firmware | `user/` | boot decision, DFU descriptors, DfuSe adaption | unchanged | unchanged |
+| USB stack | `third_party_components/CherryUSB` (submodule) | device stack + DFU class | — | — |
 
-新增硬件：在 `boards/` 下新建一个目录（`board_config.h` 必需；`board.c` 可选，
-用于整块板级实现；`board.cmake` 可选，追加编译定义），用 `-DBOARD=<name>` 选择。
-新增芯片：在 `port/` 加一个目录，用 `-DCHIP_PORT=<name>` 选择。
+New board: add a directory under `boards/` (`board_config.h` required; `board.c`
+optional, for a whole-board implementation; `board.cmake` optional, for extra compile
+definitions) and select it with `-DBOARD=<name>`.
+New chip: add a directory under `port/` and select it with `-DCHIP_PORT=<name>`.
 
 ---
 
-## 目录结构
+## Layout
 
 ```
 ch32_dfu_boot/
 ├── CMakeLists.txt
 ├── cmake/wch_riscv.cmake
-├── shared/boot_protocol.h            # 分区 + BKP 握手（boot/APP 共用）
-├── third_party_components/CherryUSB/ # git 子仓：自己的 fork，分支 ch32v30x-usbhs
-├── SDK/                              # WCH 外设库 + 启动文件
+├── shared/boot_protocol.h            # partition + BKP hand-shake (shared with the app)
+├── third_party_components/CherryUSB/ # git submodule: our fork, branch ch32v30x-usbhs
+├── SDK/                              # WCH peripheral library + startup files
 ├── boards/
-│   ├── boot_board.h / boot_board.c   # 板级通用实现（board 未自带 board.c 时使用）
-│   └── ch32v30x_ob/                  # 当前板 BSP
-│       └── board_config.h            # BOOT 按键 PA6 + LED PA5
+│   ├── boot_board.h / boot_board.c   # generic board implementation (used when a
+│   │                                 # board has no board.c of its own)
+│   └── ch32v30x_ob/                  # current board BSP
+│       └── board_config.h            # BOOT button PA6 + LED PA5
 ├── port/
-│   ├── boot_flash_port.h             # flash 抽象接口
-│   ├── boot_trigger_port.h           # 跨复位握手接口
+│   ├── boot_flash_port.h             # flash abstraction
+│   ├── boot_trigger_port.h           # cross-reset hand-shake interface
 │   ├── boot_usb_port.h
 │   └── ch32v30x/
-│       ├── boot_flash_ch32v30x.c     # WCH 快速页擦写
-│       ├── boot_trigger_ch32v30x.c   # BKP 触发
+│       ├── boot_flash_ch32v30x.c     # WCH fast page erase/write
+│       ├── boot_trigger_ch32v30x.c   # BKP trigger
 │       └── boot_usb_ch32v30x.c       # USBHS RCC + usb_dc_low_level_*
-│                                     # （USBHS 设备驱动在子仓
-│                                     #   third_party_components/CherryUSB/port/wch/ch32v30x/）
+│                                     # (the USBHS device driver lives in the
+│                                     #  submodule, under
+│                                     #  third_party_components/CherryUSB/port/wch/ch32v30x/)
 └── user/
-    ├── main.c                        # 顶层流程
-    ├── boot_entry.c/.h               # 启动判定 + 跳转
-    ├── dfu_desc.c                    # DFU 描述符 + USB 初始化
-    ├── dfu_port.c/.h                 # DfuSe → boot_flash_port 适配
+    ├── main.c                        # top level flow
+    ├── boot_entry.c/.h               # boot decision + jump
+    ├── dfu_desc.c                    # DFU descriptors + USB init
+    ├── dfu_port.c/.h                 # DfuSe -> boot_flash_port adaption
     ├── system_ch32v30x.c/.h
     ├── ch32v30x_it.c / ch32v30x_it.h / ch32v30x_conf.h
     ├── boot_log.h / usb_config.h
@@ -60,109 +68,127 @@ ch32_dfu_boot/
 
 ---
 
-## 启动流程
+## Boot flow
 
-`boot_check_and_run_app()`（`user/boot_entry.c`）依次判断：
+`boot_check_and_run_app()` (`user/boot_entry.c`) decides in this order:
 
-1. **BOOT 按键**（board 有按键且按住）→ 停留 bootloader（并清除旧触发标记）
-2. **BKP 触发标记**（APP 通过 `boot_trigger_reboot_to_boot()` 写入）→ 停留 bootloader
-3. **APP 有效性**：`0x00008000` 处首字为 JAL（`& 0x7F == 0x6F`）→ 跳转到 APP
+1. **BOOT button** (board has one and it is held) → stay in the bootloader (and clear
+   a stale trigger flag)
+2. **BKP trigger flag** (written by the application through
+   `boot_trigger_reboot_to_boot()`) → stay in the bootloader
+3. **Application validity**: the first word at `0x00008000` is a JAL
+   (`& 0x7F == 0x6F`) → jump to the application
 
-三者都不满足时初始化 USBHS，进入 DfuSe 模式等待主机。
+If none of them applies, USBHS is initialised and the device waits for the host in
+DfuSe mode.
 
-- board **无按键**时第 1 步永远不成立，只能靠 APP detach（`dfu-util -e`）进入。
-- CH32V30x 无 HPM 的 BGPR/PDGO，跨复位触发用 **BKP `BKP_DR1`**（软复位保留）。
+- On a board **without a button** step 1 never applies, so the bootloader can only be
+  entered by an application detach (`dfu-util -e`).
+- CH32V30x has no general-purpose retention register in a backup domain, so the
+  cross-reset trigger uses **BKP `BKP_DR1`** (it survives a software reset).
 
 ---
 
-## 内存布局
+## Memory layout
 
-| 项目 | 值 |
+| Item | Value |
 | --- | --- |
-| Bootloader | `0x00000000` – `0x00008000`（**32 KB**） |
-| APP | `0x00008000` – 结尾（128 KB flash → 96 KB） |
-| DFU 扇区 | 4 KB |
-| DfuSe 布局串 | `@Internal Flash /0x08008000/24*004Kg`（运行时生成） |
+| Bootloader | `0x00000000` – `0x00008000` (**32 KB**) |
+| Application | `0x00008000` – end (128 KB flash → 96 KB) |
+| DFU sector | 4 KB |
+| DfuSe layout string | `@Internal Flash /0x08008000/24*004Kg` (generated at run time) |
 
-`BOOT_PARTITION_SIZE` / `BOOT_FLASH_SIZE` 在 `shared/boot_protocol.h`；
-总 flash 可用 `-DBOOT_FLASH_SIZE=<bytes>` 覆盖（如 CH32V307 = 288 KB）。
+`BOOT_PARTITION_SIZE` / `BOOT_FLASH_SIZE` live in `shared/boot_protocol.h`; the total
+flash size can be overridden with `-DBOOT_FLASH_SIZE=<bytes>` (e.g. CH32V307 = 288 KB).
 
 ---
 
-## 编译
+## Build
 
-使用 CMake preset（见 `CMakePresets.json`）：
+Use the CMake presets (see `CMakePresets.json`):
 
 ```bash
-git submodule update --init --recursive     # 首次
+git submodule update --init --recursive     # first time only
 
-cmake --list-presets                        # 列出可用 preset
-cmake --preset ch32v30x_ob-debug            # 配置
-cmake --build --preset ch32v30x_ob-debug    # 编译
+cmake --list-presets                        # list the available presets
+cmake --preset ch32v30x_ob-debug            # configure
+cmake --build --preset ch32v30x_ob-debug    # build
 ```
 
-| preset | 说明 | 输出目录 |
+| preset | description | output directory |
 | --- | --- | --- |
-| `ch32v30x_ob-debug` | Debug（`BOOT_PRINTF` 打开） | `build/ch32v30x_ob-debug/` |
-| `ch32v30x_ob-release` | Release（日志关闭，体积更小） | `build/ch32v30x_ob-release/` |
+| `ch32v30x_ob-debug` | Debug (`BOOT_PRINTF` enabled) | `build/ch32v30x_ob-debug/` |
+| `ch32v30x_ob-release` | Release (logging off, smaller) | `build/ch32v30x_ob-release/` |
 
-产物：`<输出目录>/ch32_dfu_boot.elf | .hex | .bin`
-（Debug ≈ 21.7 KB，Release ≈ 15.0 KB，分区 32 KB）。
+Artifacts: `<output dir>/ch32_dfu_boot.elf | .hex | .bin`
+(Debug ≈ 21.7 KB, Release ≈ 15.0 KB, out of the 32 KB partition).
 
-新增 board 后照葫芦画瓢加一对 preset（`<board>-debug` / `<board>-release`），
-也可以不用 preset 直接：
+For a new board, add a pair of presets (`<board>-debug` / `<board>-release`) the same
+way, or configure directly:
 
 ```bash
 cmake -S . -B build -DBOARD=<board_name>
 cmake --build build -j
 ```
 
-> 需要 `riscv-wch-elf-` 工具链在 PATH 中（本机 `/opt/Toolchain/RISC-V_Embedded_GCC12`）。
+> The `riscv-wch-elf-` toolchain has to be in PATH (on this machine:
+> `/opt/Toolchain/RISC-V_Embedded_GCC12`).
 
 ---
 
-## 烧录与升级
+## Flashing and upgrading
 
 ```bash
-# 1) 首次：调试器烧 build/ch32v30x_ob-debug/ch32_dfu_boot.hex 到 0x00000000
+# 1) first time: with a debugger, flash build/ch32v30x_ob-debug/ch32_dfu_boot.hex to 0x00000000
 
-# 2) 进入 DFU
-#    - 带按键板：按住 BOOT 键复位
-#    - 任意板：  dfu-util -e          （APP 的 DFU runtime 触发）
+# 2) enter DFU
+#    - board with a button: hold BOOT while resetting
+#    - any board:           dfu-util -e          (the application's DFU runtime)
 
-# 3) 下载（DfuSe 必须带 -s 物理地址）
-dfu-util -a 0 -s 0x08008000:leave -D ../ch32_hello_world/build/ch32v30x_ob-debug/ch32_hello_world.bin
+# 3) download (DfuSe requires the physical address with -s)
+dfu-util -a 0 -s 0x08008000:leave -D <app.bin>
 ```
 
-Windows 下已内置 MS OS 1.0 (WCID) 描述符，正常情况下 `dfu-util` 可直接使用。
+Microsoft OS 1.0 (WCID) descriptors are built in, so `dfu-util` works on Windows
+without a manual driver step.
 
 ---
 
-## 关键实现说明
+## Implementation notes
 
-- **DfuSe 协议适配**（`user/dfu_port.c`）：CherryUSB 的 DFU 类只把 `wValue`（块号）
-  透传给 `usbd_dfu_write()`，DfuSe 特殊命令地址放在 payload 里——
-  `wValue==0` 时 `data[0]` 为 `0x21`(SET_ADDRESS)/`0x41`(ERASE)，`data[1..4]` 小端地址；
-  `wValue>=2` 时 `addr = base + (wValue-2) * wTransferSize`。
-- **Flash 抽象**（`port/boot_flash_port.h`）：`erase/write/read/addr_in_app`，端口实现
-  负责 WCH 快速页擦写（页 256 B，每次擦写前后 `RCC_HPRE_DIV2`）。
-  即使主机不发 ERASE，DFU 端口也会在首次写入某扇区时自动擦除。
-- **Bootloader 保护**：`boot_flash_addr_in_app()` 拒绝应用分区之外的擦写。
-- **跳转**：软件中断 `SW_Handler` 中 `jr 0x8000`（沿用 `ch32v305_uf2` 已验证方式）。
-- **USBHS 高速**：`-DCONFIG_USB_HS`。注意 **CherryUSB master 没有 CH32V30x USBHS 端口**：
-  它的 `port/wch/usbhs` 面向另一套 USBHS IP（CH32V205/V4x7/CH32X305/CH58x），寄存器映射与
-  CH32V30x 的 `USBHSD` 完全不同（连 `R8_USB_CTRL` 的位定义都不一样），而 master 里
-  CH32V30x 只被 USBFS 覆盖。上游在 `5c54ed49` 删掉了老的 `port/ch32/ch32hs` 且未提供替代，
-  用错驱动会让初始化写进错误寄存器，**USB 完全无法枚举**。
-  我们已把它恢复到自己的 fork：**`git@github.com:zhangjiance/CherryUSB.git`** 分支
-  **`ch32v30x-usbhs`** 的 `port/wch/ch32v30x/`，工程直接引用子仓里的这一份
-  （核心 / 类 / DFU 类仍用该分支的 master，DC API 一致可混用）。
+- **DfuSe adaption** (`user/dfu_port.c`): the CherryUSB DFU class only passes
+  `wValue` (the block number) through to `usbd_dfu_write()` while DfuSe keeps its
+  special command address in the payload - with `wValue == 0`, `data[0]` is
+  `0x21` (SET_ADDRESS) or `0x41` (ERASE) and `data[1..4]` is the address in little
+  endian; with `wValue >= 2`, `addr = base + (wValue - 2) * wTransferSize`.
+- **Flash abstraction** (`port/boot_flash_port.h`): `erase/write/read/addr_in_app`;
+  the port implements the WCH fast page mode (page 256 B, `RCC_HPRE_DIV2` around every
+  erase/program).  Even if the host never sends ERASE, the DFU port erases a sector on
+  its first write to it.
+- **Bootloader protection**: `boot_flash_addr_in_app()` refuses erases and writes
+  outside the application partition.
+- **Jump**: `jr 0x8000` from the software-interrupt handler `SW_Handler`.
+- **USBHS high speed**: `-DCONFIG_USB_HS`.  Note that **CherryUSB master has no
+  CH32V30x USBHS port**: its `port/wch/usbhs` targets another USBHS IP
+  (CH32V205/V4x7/CH32X305/CH58x) whose register map is completely different from the
+  CH32V30x `USBHSD` (even the `R8_USB_CTRL` bit assignments differ), and master only
+  covers CH32V30x through USBFS.  Upstream deleted the old `port/ch32/ch32hs` in
+  `5c54ed49` without a replacement, and the wrong driver writes to the wrong
+  registers and leaves **USB unable to enumerate**.
+  It has been restored in our own fork: **`git@github.com:zhangjiance/CherryUSB.git`**,
+  branch **`ch32v30x-usbhs`**, under `port/wch/ch32v30x/`; the project uses that copy
+  from the submodule directly (core / class / DFU still come from that branch's
+  master, the DC API is compatible).
 
 ---
 
-## 已知限制 / 后续
+## Known limitations / next steps
 
-- 目标默认 **CH32V305 类（128 KB）**；CH32V307（288 KB）改 `BOOT_FLASH_SIZE` 与链接脚本。
-- VID/PID 为占位值（`0x1A86:0xDF11` boot / `0x1A86:0xDF12` app），正式产品请替换。
-- 串口序列号为固定字符串，如需多设备区分可改为读取芯片唯一 ID。
-- CherryUSB 固定于 master 提交 `51fef88`（子仓 gitlink）。需锁版本时在子仓切 tag/commit 后提交。
+- Targets CH32V305-class parts (128 KB) by default; for a CH32V307 (288 KB) change
+  `BOOT_FLASH_SIZE` and the linker script.
+- VID/PID are placeholders (`0x1A86:0xDF11` boot / `0x1A86:0xDF12` app) - replace them
+  for a real product.
+- The serial number is a fixed string; read the chip's unique ID instead if several
+  devices have to be told apart.
+- CherryUSB is pinned to master commit `51fef88` (submodule gitlink).  To pin a
+  release, check out a tag/commit in the submodule and commit the new gitlink.
