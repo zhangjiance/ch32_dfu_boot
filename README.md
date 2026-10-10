@@ -18,14 +18,16 @@ is decoupled from the start:
 | Layer | Directory | Responsibility | New board | New chip |
 | --- | --- | --- | --- | --- |
 | Contract | `shared/` | partition layout, hand-shake (SDK independent) | unchanged | unchanged |
-| Board | `boards/<board>/board_config.h` + `boards/boot_board.c` | clock/UART/button/LED | **one header** | unchanged |
+| Board | `boards/<board>/` (`board_config.h` + `board.h` + `board.c`) | clock/UART/button/LED primitives + tick | **one directory** | unchanged |
 | Chip port | `port/<chip>/` | flash erase/write, cross-reset hand-shake, USB low level | unchanged | **one directory** |
 | Firmware | `user/` | boot decision, DFU descriptors, DfuSe adaption | unchanged | unchanged |
 | USB stack | `third_party_components/CherryUSB` (submodule) | device stack + DFU class | — | — |
 
-New board: add a directory under `boards/` (`board_config.h` required; `board.c`
-optional, for a whole-board implementation; `board.cmake` optional, for extra compile
-definitions) and select it with `-DBOARD=<name>`.
+New board: copy a directory under `boards/` and edit `board_config.h` (`BOARD_NAME` +
+the `BOARD_*` pins/features). A board directory is **self-contained** - `board_config.h`,
+`board.h` (primitives) and `board.c` (primitives + tick ISR) - so a copied directory is
+reusable as is; `board.cmake` is optional for extra compile definitions. Select it with
+`-DBOARD=<name>`.
 New chip: add a directory under `port/` and select it with `-DCHIP_PORT=<name>`.
 
 ---
@@ -40,10 +42,10 @@ ch32_dfu_boot/
 ├── third_party_components/CherryUSB/ # git submodule: our fork, branch ch32v30x-usbhs
 ├── SDK/                              # WCH peripheral library + startup files
 ├── boards/
-│   ├── boot_board.h / boot_board.c   # generic board implementation (used when a
-│   │                                 # board has no board.c of its own)
-│   └── ch32v30x_ob/                  # current board BSP
-│       └── board_config.h            # BOOT button PA6 + LED PA5
+│   └── ch32v30x_ob/                  # current board BSP (self-contained, copy to reuse)
+│       ├── board_config.h            # BOARD_* macros: BOOT button PA6 + LED PA5
+│       ├── board.h                   # board primitive interface
+│       └── board.c                   # board primitives + the periodic tick ISR
 ├── port/
 │   ├── boot_flash_port.h             # flash abstraction
 │   ├── boot_trigger_port.h           # cross-reset hand-shake interface

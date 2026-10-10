@@ -4,7 +4,7 @@
  * CH32V30x DFU bootloader entry point.
  *
  * Power-on flow:
- *   1. board bring-up (boards/boot_board.c + the selected board_config.h)
+ *   1. board bring-up (boards/<board>/board.c + board_config.h)
  *   2. boot_check_and_run_app(): button / DFU request / APP signature
  *      -> never returns when the application is booted
  *   3. otherwise USBHS comes up as a DfuSe device and waits for dfu-util
@@ -12,8 +12,8 @@
 #include "debug.h"
 
 #include "board_config.h"
+#include "board.h"
 #include "boot_log.h"
-#include "boot_board.h"
 #include "boot_entry.h"
 #include "boot_protocol.h"
 #include "boot_trigger_port.h"
@@ -29,7 +29,12 @@ extern void dfu_boot_init(uint8_t busid, uintptr_t reg_base);
 
 int main(void)
 {
-    boot_board_init();
+    board_init();
+    /* The log UART is an application concern - the board layer owns pins, not
+     * a console - so it is brought up here, and only in the logging build. */
+#if BOOT_LOG_ENABLED
+    USART_Printf_Init(BOOT_LOG_BAUDRATE);
+#endif
 
     BOOT_PRINTF("\r\n\r\n");
     BOOT_PRINTF("========================================\r\n");
@@ -57,7 +62,7 @@ int main(void)
      * re-enumeration avoids it.
      */
     boot_usb_port_deinit();
-    Delay_Ms(50);
+    board_delay_ms(50);
 
     dfu_boot_init(0, USBHS_BASE);
 
@@ -68,9 +73,9 @@ int main(void)
              * application -- resetting earlier makes the device vanish
              * mid-transaction and dfu-util reports
              * "Error during download get_status". */
-            Delay_Ms(DFU_LEAVE_DELAY_MS);
+            board_delay_ms(DFU_LEAVE_DELAY_MS);
             boot_system_reset();
         }
-        Delay_Ms(1);
+        board_delay_ms(1);
     }
 }

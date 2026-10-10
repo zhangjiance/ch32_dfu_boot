@@ -15,8 +15,9 @@
 
 #include "boot_log.h"
 #include "boot_protocol.h"
-#include "boot_board.h"
+#include "board.h"
 #include "boot_trigger_port.h"
+#include "boot_usb_port.h"
 
 #include "debug.h"      /* ch32v30x.h -> core_riscv (NVIC / Software_IRQn) */
 
@@ -48,7 +49,7 @@ void boot_jump_to_app(void)
     BOOT_PRINTF("[BOOT] jumping to application @ 0x%08lX\r\n",
                 (unsigned long)BOOT_APP_OFFSET);
 
-    boot_board_deinit();
+    boot_usb_port_deinit();
 
     NVIC_EnableIRQ(Software_IRQn);
     NVIC_SetPendingIRQ(Software_IRQn);
@@ -59,16 +60,16 @@ void boot_jump_to_app(void)
 
 void boot_check_and_run_app(void)
 {
-    if (boot_board_has_boot_button()) {
-        if (boot_board_read_bootpin()) {
-            BOOT_PRINTF("[BOOT] boot button pressed, staying in bootloader\r\n");
-            /* Drop any stale request so the next reset boots the APP. */
-            (void)boot_trigger_check_and_clear();
-            return;
-        }
-    } else {
-        BOOT_PRINTF("[BOOT] board has no boot button\r\n");
+#if BOARD_HAS_BOOT_BUTTON
+    if (board_read_boot_pin()) {
+        BOOT_PRINTF("[BOOT] boot button pressed, staying in bootloader\r\n");
+        /* Drop any stale request so the next reset boots the APP. */
+        (void)boot_trigger_check_and_clear();
+        return;
     }
+#else
+    BOOT_PRINTF("[BOOT] board has no boot button\r\n");
+#endif
 
     if (boot_trigger_check_and_clear()) {
         BOOT_PRINTF("[BOOT] DFU request from application, staying in bootloader\r\n");

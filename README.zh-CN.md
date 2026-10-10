@@ -16,13 +16,15 @@ Boot 需要面向**多个硬件 / 未来多个 CH32 芯片**，因此从一开�
 | 层 | 目录 | 职责 | 换硬件 | 换芯片 |
 | --- | --- | --- | --- | --- |
 | 契约 | `shared/` | 分区布局、握手指令（SDK 无关） | 不变 | 不变 |
-| 板级 | `boards/<board>/board_config.h` + `boards/boot_board.c` | 时钟/串口/按键/LED | **只加一个头文件** | 不变 |
+| 板级 | `boards/<board>/`（`board_config.h` + `board.h` + `board.c`） | 时钟/串口/按键/LED 原语 + tick | **只加一个目录** | 不变 |
 | 芯片端口 | `port/<chip>/` | flash 擦写、跨复位握手、USB 底层 | 不变 | **只加一个目录** |
 | 固件 | `user/` | 启动判定、DFU 描述符、DfuSe 适配 | 不变 | 不变 |
 | USB 栈 | `third_party_components/CherryUSB`（子仓） | 设备栈 + DFU 类 | — | — |
 
-新增硬件：在 `boards/` 下新建一个目录（`board_config.h` 必需；`board.c` 可选，
-用于整块板级实现；`board.cmake` 可选，追加编译定义），用 `-DBOARD=<name>` 选择。
+新增硬件：拷贝 `boards/` 下的一个目录，改 `board_config.h`（`BOARD_NAME` + `BOARD_*`
+引脚/特性）即可。板目录是**自包含**的 —— `board_config.h`、`board.h`（原语接口）、
+`board.c`（原语实现 + tick 中断），拷贝过去直接可用；`board.cmake` 可选，追加编译定义。
+用 `-DBOARD=<name>` 选择。
 新增芯片：在 `port/` 加一个目录，用 `-DCHIP_PORT=<name>` 选择。
 
 ---
@@ -37,9 +39,10 @@ ch32_dfu_boot/
 ├── third_party_components/CherryUSB/ # git 子仓：自己的 fork，分支 ch32v30x-usbhs
 ├── SDK/                              # WCH 外设库 + 启动文件
 ├── boards/
-│   ├── boot_board.h / boot_board.c   # 板级通用实现（board 未自带 board.c 时使用）
-│   └── ch32v30x_ob/                  # 当前板 BSP
-│       └── board_config.h            # BOOT 按键 PA6 + LED PA5
+│   └── ch32v30x_ob/                  # 当前板 BSP（自包含，拷贝即复用）
+│       ├── board_config.h            # BOARD_* 宏：BOOT 按键 PA6 + LED PA5
+│       ├── board.h                   # 板级原语接口
+│       └── board.c                   # 板级原语 + 周期 tick 中断
 ├── port/
 │   ├── boot_flash_port.h             # flash 抽象接口
 │   ├── boot_trigger_port.h           # 跨复位握手接口

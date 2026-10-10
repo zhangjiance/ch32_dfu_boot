@@ -17,7 +17,7 @@
 #include "boot_log.h"
 #include "boot_protocol.h"
 #include "boot_flash_port.h"
-#include "boot_board.h"
+#include "board.h"
 
 #include "dfu_port.h"
 
@@ -130,7 +130,7 @@ int usbd_dfu_write(uint16_t value, const uint8_t *data, uint16_t length)
             s_dfu_addr = addr;
             note_range_erased(sector, sector + boot_flash_erase_size());
             BOOT_PRINTF("[DFU] erase 0x%08lX\r\n", (unsigned long)addr);
-            boot_board_led_toggle();
+            board_led_toggle();
             return 0;
         }
         /* DFU_SPECIAL_CMD_READ_UNPROTECT and anything else: ignore */
@@ -160,7 +160,7 @@ int usbd_dfu_write(uint16_t value, const uint8_t *data, uint16_t length)
         if (boot_flash_write(addr, data, length) != 0) {
             return 1;
         }
-        boot_board_led_toggle();
+        board_led_toggle();
         return 0;
     }
 
