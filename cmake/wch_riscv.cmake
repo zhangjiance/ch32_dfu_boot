@@ -22,7 +22,7 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 # with. -Oz and -fno-unwind-tables were tried for size but are backed out here
 # while the USB bring-up problem is being isolated.
 set(CMAKE_C_FLAGS_DEBUG "-Os -g3")
-set(CMAKE_C_FLAGS_RELEASE "-Os -g0")
+set(CMAKE_C_FLAGS_RELEASE "-Os -flto -g0")
 
 # MCU specific flags
 #
