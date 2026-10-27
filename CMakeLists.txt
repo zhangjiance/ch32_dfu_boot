@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.22)
 #
 # Layering (kept deliberately decoupled so new boards/chips are additive):
 #   shared/            boot <-> app contract (partition, hand-shake)
-#   boards/<board>/    board_config.h; boards/boot_board.c is the generic impl
+#   boards/<board>/    board_config.h + board.c + board.cmake (self-contained)
 #   port/<chip>/       flash + hand-shake + USB device controller glue
 #   user/              chip/board agnostic firmware (entry, descriptors, DFU)
 #

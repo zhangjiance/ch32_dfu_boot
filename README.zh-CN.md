@@ -43,7 +43,8 @@ ch32_dfu_boot/
 │   └── ch32v30x_ob/                  # 当前板 BSP（自包含，拷贝即复用）
 │       ├── board_config.h            # BOARD_* 宏：BOOT 按键 PA6 + LED PA5
 │       ├── board.h                   # 板级原语接口
-│       └── board.c                   # 板级原语 + 周期 tick 中断
+│       ├── board.c                   # 板级原语 + 周期 tick 中断
+│       └── board.cmake               # 晶振 + 时钟树
 ├── port/
 │   ├── boot_flash_port.h             # flash 抽象接口
 │   ├── boot_trigger_port.h           # 跨复位握手接口
@@ -59,7 +60,7 @@ ch32_dfu_boot/
     ├── boot_entry.c/.h               # 启动判定 + 跳转
     ├── dfu_desc.c                    # DFU 描述符 + USB 初始化
     ├── dfu_port.c/.h                 # DfuSe → boot_flash_port 适配
-    ├── funconfig.h                   # ch32fun 配置（时钟树、printf）
+    ├── funconfig.h                   # ch32fun 配置（printf、体积开关）
     ├── boot_log.h / usb_config.h
     └── Link.ld                       # 0x00000000 + 32K
 ```

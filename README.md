@@ -29,8 +29,9 @@ New board: copy a directory under `boards/` and edit `board_config.h` (`BOARD_NA
 the `BOARD_*` pins/features). A board directory is **self-contained** - `board_config.h`,
 `board.h` (primitives) and `board.c` (primitives + tick ISR) - so a copied directory is
 reusable as is; `board.cmake` is optional for extra compile definitions. Select it with
-`-DBOARD=<name>`. A board with a different crystal also has to change the clock values
-in `user/funconfig.h`, which is where ch32fun reads them.
+`-DBOARD=<name>`. Nothing outside the folder has to change for a new board: the
+crystal and the clock tree live in `boards/<board>/board.cmake`, the pins and the
+peripheral instances in `board_config.h`.
 New chip: add a directory under `port/` and select it with `-DCHIP_PORT=<name>`.
 
 ---
@@ -49,7 +50,8 @@ ch32_dfu_boot/
 │   └── ch32v30x_ob/                  # current board BSP (self-contained, copy to reuse)
 │       ├── board_config.h            # BOARD_* macros: BOOT button PA6 + LED PA5
 │       ├── board.h                   # board primitive interface
-│       └── board.c                   # board primitives + the periodic tick ISR
+│       ├── board.c                   # board primitives + the periodic tick ISR
+│       └── board.cmake               # crystal + clock tree
 ├── port/
 │   ├── boot_flash_port.h             # flash abstraction
 │   ├── boot_trigger_port.h           # cross-reset hand-shake interface
@@ -65,7 +67,7 @@ ch32_dfu_boot/
     ├── boot_entry.c/.h               # boot decision + jump
     ├── dfu_desc.c                    # DFU descriptors + USB init
     ├── dfu_port.c/.h                 # DfuSe -> boot_flash_port adaption
-    ├── funconfig.h                   # ch32fun configuration (clock tree, printf)
+    ├── funconfig.h                   # ch32fun configuration (printf, size knobs)
     ├── boot_log.h / usb_config.h
     └── Link.ld                       # 0x00000000 + 32K
 ```
