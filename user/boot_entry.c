@@ -19,7 +19,11 @@
 #include "boot_trigger_port.h"
 #include "boot_usb_port.h"
 
+#if defined(BOOT_USE_CH32FUN)
+#include "ch32fun.h"    /* NVIC_EnableIRQ / NVIC_SetPendingIRQ / Software_IRQn */
+#else
 #include "debug.h"      /* ch32v30x.h -> core_riscv (NVIC / Software_IRQn) */
+#endif
 
 /* ------------------------------------------------------------------ *
  * Application validity

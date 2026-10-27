@@ -111,15 +111,51 @@ cmake --build --preset ch32v30x_ob-debug    # 编译
 | --- | --- | --- |
 | `ch32v30x_ob-debug` | Debug（`BOOT_PRINTF` 打开） | `build/ch32v30x_ob-debug/` |
 | `ch32v30x_ob-release` | Release（日志关闭，体积更小） | `build/ch32v30x_ob-release/` |
+| `ch32v30x_ob-debug-ch32fun` | 同上，改用 ch32fun 后端 | `build/ch32v30x_ob-debug-ch32fun/` |
+| `ch32v30x_ob-release-ch32fun` | 同上，改用 ch32fun 后端 | `build/ch32v30x_ob-release-ch32fun/` |
 
 产物：`<输出目录>/ch32_dfu_boot.elf | .hex | .bin`
-（Debug ≈ 21.7 KB，Release ≈ 15.0 KB，分区 32 KB）。
+
+| preset | Release | Debug |
+| --- | --- | --- |
+| `*`（WCH SDK） | 11812 B | 22156 B |
+| `*-ch32fun` | **9996 B** | 14484 B |
+
+分区 32 KB。
+
+### 外设库后端
+
+`-DSDK_BACKEND=wch|ch32fun` 决定 board 层和芯片 port 层下面用哪套库。
+
+* `wch`（默认）——`SDK/` 里的 WCH ch32v30x 外设库 + 官方启动文件。
+* `ch32fun`——[ch32fun](https://github.com/cnlohr/ch32fun)，寄存器级：
+  `ch32fun.c` 提供启动、时钟树和 `printf` 输出，其余由 `board_ch32fun.c` 与
+  `port/ch32v30x/boot_*_ch32v30xfun.c` 提供。默认在
+  `third_party_components/ch32fun`（子仓，已固定在验证过的提交），
+  `git submodule update --init --recursive` 会自动拉取；也可用
+  `-DCH32FUN_ROOT=<path>` 指定别的副本。
+
+同一份固件的实测体积（Release，`-Os`，LTO 配置一致）：
+
+| 层 | WCH + CherryUSB | ch32fun + CherryUSB |
+| --- | --- | --- |
+| USB 栈（驱动 + core + DFU 类） | 7162 B | 7160 B |
+| board + port + 应用 | 1660 B | 1236 B |
+| 外设库 / 辅助 | 680 B | 700 B |
+| 启动 / 时钟 | 250 B | 646 B |
+| libc（格式化、64 位除法） | 1290 B | 58 B |
+| 向量表 / rodata / 对齐 | 770 B | 196 B |
+| **`.bin` 合计** | **11812 B** | **9996 B** |
+
+差距来自 C 库而不是外设库：WCH 版还链着 `__udivdi3`（时基里的 64 位除法），
+ch32fun 版用自带的 `printf` 替掉了 newlib。两版都是 CherryUSB 占大头（约 60%），
+再往下压只能从这里入手。
 
 新增 board 后照葫芦画瓢加一对 preset（`<board>-debug` / `<board>-release`），
 也可以不用 preset 直接：
 
 ```bash
-cmake -S . -B build -DBOARD=<board_name>
+cmake -S . -B build -DBOARD=<board_name> [-DSDK_BACKEND=ch32fun]
 cmake --build build -j
 ```
 
@@ -170,5 +206,5 @@ Windows 下已内置 MS OS 1.0 (WCID) 描述符，正常情况下 `dfu-util` 可
 
 - 目标默认 **CH32V305 类（128 KB）**；CH32V307（288 KB）改 `BOOT_FLASH_SIZE` 与链接脚本。
 - VID/PID 为占位值（`0x1A86:0xDF11` boot / `0x1A86:0xDF12` app），正式产品请替换。
-- 串口序列号为固定字符串，如需多设备区分可改为读取芯片唯一 ID。
+- 序列号取自芯片唯一 ID（0x1FFFF7E8）；同批次芯片前若干字节相同，不要当作全局唯一。
 - CherryUSB 固定于 master 提交 `51fef88`（子仓 gitlink）。需锁版本时在子仓切 tag/commit 后提交。

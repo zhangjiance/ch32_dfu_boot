@@ -37,15 +37,19 @@ New chip: add a directory under `port/` and select it with `-DCHIP_PORT=<name>`.
 ```
 ch32_dfu_boot/
 ├── CMakeLists.txt
-├── cmake/wch_riscv.cmake
+├── cmake/wch_riscv.cmake             # SDK_BACKEND=wch toolchain
+├── cmake/ch32fun_riscv.cmake         # SDK_BACKEND=ch32fun toolchain
 ├── shared/boot_protocol.h            # partition + BKP hand-shake (shared with the app)
-├── third_party_components/CherryUSB/ # git submodule: our fork, branch ch32v30x-usbhs
+├── third_party_components/
+│   ├── CherryUSB/                    # git submodule: our fork, branch ch32v30x-usbhs
+│   └── ch32fun/                      # git submodule: cnlohr/ch32fun, pinned
 ├── SDK/                              # WCH peripheral library + startup files
 ├── boards/
 │   └── ch32v30x_ob/                  # current board BSP (self-contained, copy to reuse)
 │       ├── board_config.h            # BOARD_* macros: BOOT button PA6 + LED PA5
 │       ├── board.h                   # board primitive interface
-│       └── board.c                   # board primitives + the periodic tick ISR
+│       ├── board.c                   # board primitives + the periodic tick ISR
+│       └── board_ch32fun.c           # same primitives, ch32fun backend
 ├── port/
 │   ├── boot_flash_port.h             # flash abstraction
 │   ├── boot_trigger_port.h           # cross-reset hand-shake interface
@@ -53,15 +57,16 @@ ch32_dfu_boot/
 │   └── ch32v30x/
 │       ├── boot_flash_ch32v30x.c     # WCH fast page erase/write
 │       ├── boot_trigger_ch32v30x.c   # BKP trigger
-│       └── boot_usb_ch32v30x.c       # USBHS RCC + usb_dc_low_level_*
-│                                     # (the USBHS device driver lives in the
-│                                     #  submodule, under
-│                                     #  third_party_components/CherryUSB/port/wch/ch32v30x/)
+│       ├── boot_usb_ch32v30x.c       # USBHS RCC + usb_dc_low_level_*
+│       └── boot_*_ch32v30xfun.c      # the same three, ch32fun backend
+│                                     # (the CherryUSB USBHS device driver lives in
+│                                     #  the submodule, port/wch/ch32v30x/)
 └── user/
     ├── main.c                        # top level flow
     ├── boot_entry.c/.h               # boot decision + jump
     ├── dfu_desc.c                    # DFU descriptors + USB init
     ├── dfu_port.c/.h                 # DfuSe -> boot_flash_port adaption
+    ├── funconfig.h                   # ch32fun configuration
     ├── system_ch32v30x.c/.h
     ├── ch32v30x_it.c / ch32v30x_it.h / ch32v30x_conf.h
     ├── boot_log.h / usb_config.h
@@ -121,15 +126,54 @@ cmake --build --preset ch32v30x_ob-debug    # build
 | --- | --- | --- |
 | `ch32v30x_ob-debug` | Debug (`BOOT_PRINTF` enabled) | `build/ch32v30x_ob-debug/` |
 | `ch32v30x_ob-release` | Release (logging off, smaller) | `build/ch32v30x_ob-release/` |
+| `ch32v30x_ob-debug-ch32fun` | same, ch32fun backend | `build/ch32v30x_ob-debug-ch32fun/` |
+| `ch32v30x_ob-release-ch32fun` | same, ch32fun backend | `build/ch32v30x_ob-release-ch32fun/` |
 
 Artifacts: `<output dir>/ch32_dfu_boot.elf | .hex | .bin`
-(Debug ≈ 21.7 KB, Release ≈ 15.0 KB, out of the 32 KB partition).
+
+| preset | Release | Debug |
+| --- | --- | --- |
+| `*` (WCH SDK) | 11812 B | 22156 B |
+| `*-ch32fun` | **9996 B** | 14484 B |
+
+out of the 32 KB partition.
+
+### Peripheral library backend
+
+`-DSDK_BACKEND=wch|ch32fun` picks what sits under the board and chip port
+layers.
+
+* `wch` (default) - the WCH ch32v30x peripheral library from `SDK/` plus its
+  startup file.
+* `ch32fun` - [ch32fun](https://github.com/cnlohr/ch32fun), register level:
+  `ch32fun.c` supplies the startup, the clock tree and the `printf` transport,
+  `board_ch32fun.c` and `port/ch32v30x/boot_*_ch32v30xfun.c` supply everything
+  else.  It is a git submodule pinned to a known-good commit, so
+  `git submodule update --init --recursive` fetches it; point
+  `-DCH32FUN_ROOT=<path>` at another checkout to override.
+
+Measured size of the same firmware (Release, `-Os`, LTO as configured):
+
+| layer | WCH + CherryUSB | ch32fun + CherryUSB |
+| --- | --- | --- |
+| USB stack (driver + core + DFU class) | 7162 B | 7160 B |
+| board + port + application | 1660 B | 1236 B |
+| peripheral library / helpers | 680 B | 700 B |
+| startup / clock | 250 B | 646 B |
+| libc (formatter, 64-bit math) | 1290 B | 58 B |
+| vector table / rodata / padding | 770 B | 196 B |
+| **`.bin` total** | **11812 B** | **9996 B** |
+
+The gap comes from the C library, not from the peripheral library: the WCH build
+still links `__udivdi3` (the 64-bit divide in the time base), the ch32fun build
+replaces newlib's `printf`/`snprintf`.  Both builds are dominated by CherryUSB
+(≈ 60 %), so that is where any further saving has to come from.
 
 For a new board, add a pair of presets (`<board>-debug` / `<board>-release`) the same
 way, or configure directly:
 
 ```bash
-cmake -S . -B build -DBOARD=<board_name>
+cmake -S . -B build -DBOARD=<board_name> [-DSDK_BACKEND=ch32fun]
 cmake --build build -j
 ```
 
@@ -190,7 +234,7 @@ without a manual driver step.
   `BOOT_FLASH_SIZE` and the linker script.
 - VID/PID are placeholders (`0x1A86:0xDF11` boot / `0x1A86:0xDF12` app) - replace them
   for a real product.
-- The serial number is a fixed string; read the chip's unique ID instead if several
-  devices have to be told apart.
+- The serial number is derived from the chip's unique ID (0x1FFFF7E8); boards
+  from the same batch share the first bytes, so do not treat it as unique there.
 - CherryUSB is pinned to master commit `51fef88` (submodule gitlink).  To pin a
   release, check out a tag/commit in the submodule and commit the new gitlink.

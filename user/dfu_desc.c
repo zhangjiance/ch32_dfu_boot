@@ -16,14 +16,66 @@
 #include "dfu_port.h"
 #include "usb_config.h"
 
-#include <stdio.h>
-
 /* DFU interface (9) + functional descriptor (9) */
 #define DFU_DESC_TOTAL_LEN (9 + 9)
 #define USB_CONFIG_SIZE    (9 + DFU_DESC_TOTAL_LEN)
 
 /* Runtime-generated DfuSe memory layout string (iInterface = 4). */
 static char flash_desc_str[64];
+
+/* ------------------------------------------------------------------ *
+ * Minimal formatter
+ *
+ * The layout string has one fixed shape:
+ *     "@Internal Flash /0x%08lX/%lu*%03luK%c"
+ * Writing it by hand instead of with printf()/snprintf() keeps the whole
+ * formatter - newlib's vfprintf plus malloc, or ch32fun's mini_vpprintf - out
+ * of the release build, where nothing else formats anything.  That is ~3.4 KB
+ * with the WCH SDK and ~0.9 KB with ch32fun, well over the rest of the boot
+ * core; a Release build logs nothing, so the only caller would be this string.
+ * ------------------------------------------------------------------ */
+static char *put_str(char *p, const char *s)
+{
+    while (*s != '\0') {
+        *p++ = *s++;
+    }
+    return p;
+}
+
+static char *put_hex8(char *p, uint32_t v)
+{
+    static const char hex[] = "0123456789ABCDEF";
+
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        *p++ = hex[(v >> shift) & 0x0FU];
+    }
+    return p;
+}
+
+static char *put_dec(char *p, uint32_t v)
+{
+    char digits[10];
+    uint32_t n = 0U;
+
+    do {
+        digits[n++] = (char)('0' + (v % 10U));
+        v /= 10U;
+    } while (v != 0U);
+
+    while (n > 0U) {
+        *p++ = digits[--n];
+    }
+    return p;
+}
+
+/* Zero padded to three digits: DfuSe counts the sector size in whole KiB. */
+static char *put_dec3(char *p, uint32_t v)
+{
+    *p++ = (char)('0' + ((v / 100U) % 10U));
+    *p++ = (char)('0' + ((v / 10U) % 10U));
+    *p++ = (char)('0' + (v % 10U));
+    return p;
+}
 
 /* Serial number from the CH32V30x unique id (0x1FFFF7E8), filled at init. */
 static char serial_string[25];
@@ -144,7 +196,11 @@ static const uint8_t msos_compat_id[] = {
  * cover every byte written truncates the descriptor (Windows then drops the
  * property), so the layout is spelled out here and used by the builder below:
  *
- *   header (10) + section (4 + 4 + 2 + 40 + 4 + 80 = 134) = 144
+ *   header (10) + section (4 + 4 + 2 + 42 + 4 + 80 = 136) = 146
+ *
+ * (42 = "DeviceInterfaceGUIDs" with its NUL, in UTF-16; 80 = the 38 character
+ * GUID, its NUL and the list terminator, in UTF-16.  Both lengths are derived
+ * from the literals below, so the buffer and dwLength cannot drift apart.)
  */
 #define MSOS_PROP_NAME        "DeviceInterfaceGUIDs"
 #define MSOS_PROP_NAME_BYTES  ((uint32_t)sizeof(MSOS_PROP_NAME) * 2U)
@@ -337,13 +393,17 @@ void dfu_boot_init(uint8_t busid, uintptr_t reg_base)
 #define BOOT_DFUSE_SEGMENT_TYPE 'g'
     uint32_t erase = boot_flash_erase_size();
     uint32_t sectors = boot_flash_app_size() / erase;
+    char *p = flash_desc_str;
 
-    (void)snprintf(flash_desc_str, sizeof(flash_desc_str),
-                   "@Internal Flash /0x%08lX/%lu*%03luK%c",
-                   (unsigned long)boot_flash_app_start(),
-                   (unsigned long)sectors,
-                   (unsigned long)(erase / 1024U),
-                   BOOT_DFUSE_SEGMENT_TYPE);
+    p = put_str(p, "@Internal Flash /0x");
+    p = put_hex8(p, boot_flash_app_start());
+    p = put_str(p, "/");
+    p = put_dec(p, sectors);
+    p = put_str(p, "*");
+    p = put_dec3(p, erase / 1024U);
+    p = put_str(p, "K");
+    *p++ = BOOT_DFUSE_SEGMENT_TYPE;
+    *p = '\0';
 
     build_serial_string();
     msos_ext_prop_build();
