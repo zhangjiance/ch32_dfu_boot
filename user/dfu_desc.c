@@ -29,10 +29,10 @@ static char flash_desc_str[64];
  * The layout string has one fixed shape:
  *     "@Internal Flash /0x%08lX/%lu*%03luK%c"
  * Writing it by hand instead of with printf()/snprintf() keeps the whole
- * formatter - newlib's vfprintf plus malloc, or ch32fun's mini_vpprintf - out
- * of the release build, where nothing else formats anything.  That is ~3.4 KB
- * with the WCH SDK and ~0.9 KB with ch32fun, well over the rest of the boot
- * core; a Release build logs nothing, so the only caller would be this string.
+ * formatter - ch32fun's mini_vpprintf, or newlib's vfprintf plus malloc - out
+ * of the release build, where nothing else formats anything.  That is ~0.9 KB
+ * (or several KB with newlib), well over the rest of the boot core; a Release
+ * build logs nothing, so the only caller would be this string.
  * ------------------------------------------------------------------ */
 static char *put_str(char *p, const char *s)
 {

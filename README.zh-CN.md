@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-基于 **CherryUSB** 的 **CH32V30x USB DFU 引导程序（DfuSe）**。
+基于 **ch32fun** + **CherryUSB** 的 **CH32V30x USB DFU 引导程序（DfuSe）**，不依赖任何厂商库。
 
 配套的 **APP 镜像**链接在应用分区 `0x00008000`，可通过自身的 DFU runtime 接口
 （`dfu-util -e`）回到本 bootloader，带按键的板子也可以长按 BOOT 键回到这里。
@@ -34,10 +34,11 @@ Boot 需要面向**多个硬件 / 未来多个 CH32 芯片**，因此从一开�
 ```
 ch32_dfu_boot/
 ├── CMakeLists.txt
-├── cmake/wch_riscv.cmake
+├── cmake/riscv.cmake                 # riscv-wch-elf- 工具链与编译选项
 ├── shared/boot_protocol.h            # 分区 + BKP 握手（boot/APP 共用）
-├── third_party_components/CherryUSB/ # git 子仓：自己的 fork，分支 ch32v30x-usbhs
-├── SDK/                              # WCH 外设库 + 启动文件
+├── third_party_components/
+│   ├── CherryUSB/                    # git 子仓：自己的 fork，分支 ch32v30x-usbhs
+│   └── ch32fun/                      # git 子仓：cnlohr/ch32fun，已固定提交
 ├── boards/
 │   └── ch32v30x_ob/                  # 当前板 BSP（自包含，拷贝即复用）
 │       ├── board_config.h            # BOARD_* 宏：BOOT 按键 PA6 + LED PA5
@@ -48,9 +49,9 @@ ch32_dfu_boot/
 │   ├── boot_trigger_port.h           # 跨复位握手接口
 │   ├── boot_usb_port.h
 │   └── ch32v30x/
-│       ├── boot_flash_ch32v30x.c     # WCH 快速页擦写
+│       ├── boot_flash_ch32v30x.c     # 快速页擦写
 │       ├── boot_trigger_ch32v30x.c   # BKP 触发
-│       └── boot_usb_ch32v30x.c       # USBHS RCC + usb_dc_low_level_*
+│       └── boot_usb_ch32v30x.c       # USBHS 时钟 + usb_dc_low_level_*
 │                                     # （USBHS 设备驱动在子仓
 │                                     #   third_party_components/CherryUSB/port/wch/ch32v30x/）
 └── user/
@@ -58,8 +59,7 @@ ch32_dfu_boot/
     ├── boot_entry.c/.h               # 启动判定 + 跳转
     ├── dfu_desc.c                    # DFU 描述符 + USB 初始化
     ├── dfu_port.c/.h                 # DfuSe → boot_flash_port 适配
-    ├── system_ch32v30x.c/.h
-    ├── ch32v30x_it.c / ch32v30x_it.h / ch32v30x_conf.h
+    ├── funconfig.h                   # ch32fun 配置（时钟树、printf）
     ├── boot_log.h / usb_config.h
     └── Link.ld                       # 0x00000000 + 32K
 ```
@@ -111,51 +111,37 @@ cmake --build --preset ch32v30x_ob-debug    # 编译
 | --- | --- | --- |
 | `ch32v30x_ob-debug` | Debug（`BOOT_PRINTF` 打开） | `build/ch32v30x_ob-debug/` |
 | `ch32v30x_ob-release` | Release（日志关闭，体积更小） | `build/ch32v30x_ob-release/` |
-| `ch32v30x_ob-debug-ch32fun` | 同上，改用 ch32fun 后端 | `build/ch32v30x_ob-debug-ch32fun/` |
-| `ch32v30x_ob-release-ch32fun` | 同上，改用 ch32fun 后端 | `build/ch32v30x_ob-release-ch32fun/` |
 
 产物：`<输出目录>/ch32_dfu_boot.elf | .hex | .bin`
+（Debug ≈ 14.4 KB，Release ≈ 10.0 KB，分区 32 KB）。
 
-| preset | Release | Debug |
-| --- | --- | --- |
-| `*`（WCH SDK） | 11812 B | 22156 B |
-| `*-ch32fun` | **9996 B** | 14484 B |
+### 镜像里有什么
 
-分区 32 KB。
+[ch32fun](https://github.com/cnlohr/ch32fun) 提供启动、向量表、时钟树和 `printf`，
+其余全部是 `board.c` 与芯片 port 里的寄存器操作——构建里没有任何厂商 HAL。
+ch32fun 是 git 子仓并固定在验证过的提交，`git submodule update --init --recursive`
+会自动拉取；也可用 `-DCH32FUN_ROOT=<path>` 指定别的副本。
 
-### 外设库后端
+实测体积（Release，`-Os`，LTO 如配置）：
 
-`-DSDK_BACKEND=wch|ch32fun` 决定 board 层和芯片 port 层下面用哪套库。
+| 层 | 大小 |
+| --- | --- |
+| USB 栈（驱动 + core + DFU 类） | 7228 B |
+| board + port + 应用 | 1236 B |
+| 启动 / 时钟 / 向量表 | 646 B |
+| ch32fun 辅助 | 632 B |
+| libc / 格式化 | 58 B |
+| 对齐填充 | 164 B |
+| **`.bin` 合计** | **9964 B** |
 
-* `wch`（默认）——`SDK/` 里的 WCH ch32v30x 外设库 + 官方启动文件。
-* `ch32fun`——[ch32fun](https://github.com/cnlohr/ch32fun)，寄存器级：
-  `ch32fun.c` 提供启动、时钟树和 `printf` 输出，其余由 `board_ch32fun.c` 与
-  `port/ch32v30x/boot_*_ch32v30xfun.c` 提供。默认在
-  `third_party_components/ch32fun`（子仓，已固定在验证过的提交），
-  `git submodule update --init --recursive` 会自动拉取；也可用
-  `-DCH32FUN_ROOT=<path>` 指定别的副本。
-
-同一份固件的实测体积（Release，`-Os`，LTO 配置一致）：
-
-| 层 | WCH + CherryUSB | ch32fun + CherryUSB |
-| --- | --- | --- |
-| USB 栈（驱动 + core + DFU 类） | 7162 B | 7160 B |
-| board + port + 应用 | 1660 B | 1236 B |
-| 外设库 / 辅助 | 680 B | 700 B |
-| 启动 / 时钟 | 250 B | 646 B |
-| libc（格式化、64 位除法） | 1290 B | 58 B |
-| 向量表 / rodata / 对齐 | 770 B | 196 B |
-| **`.bin` 合计** | **11812 B** | **9996 B** |
-
-差距来自 C 库而不是外设库：WCH 版还链着 `__udivdi3`（时基里的 64 位除法），
-ch32fun 版用自带的 `printf` 替掉了 newlib。两版都是 CherryUSB 占大头（约 60%），
-再往下压只能从这里入手。
+其中 CherryUSB 约占 73%，再往下压只能从这里入手。`user/dfu_desc.c` 里 DfuSe
+布局串改成手写而不用 `snprintf`，也是同一原因：光是格式化器就要约 0.9 KB。
 
 新增 board 后照葫芦画瓢加一对 preset（`<board>-debug` / `<board>-release`），
 也可以不用 preset 直接：
 
 ```bash
-cmake -S . -B build -DBOARD=<board_name> [-DSDK_BACKEND=ch32fun]
+cmake -S . -B build -DBOARD=<board_name>
 cmake --build build -j
 ```
 
