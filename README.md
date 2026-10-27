@@ -69,7 +69,7 @@ ch32_dfu_boot/
     ├── dfu_port.c/.h                 # DfuSe -> boot_flash_port adaption
     ├── funconfig.h                   # ch32fun configuration (printf, size knobs)
     ├── boot_log.h / usb_config.h
-    └── Link.ld                       # 0x00000000 + 32K
+    └── Link.ld                       # 0x00000000 + 12K
 ```
 
 ---
@@ -99,10 +99,10 @@ DfuSe mode.
 
 | Item | Value |
 | --- | --- |
-| Bootloader | `0x00000000` – `0x00008000` (**32 KB**) |
-| Application | `0x00008000` – end (128 KB flash → 96 KB) |
+| Bootloader | `0x00000000` – `0x00003000` (**12 KB**) |
+| Application | `0x00003000` – end (128 KB flash → 116 KB, sector aligned) |
 | DFU sector | 4 KB |
-| DfuSe layout string | `@Internal Flash /0x08008000/24*004Kg` (generated at run time) |
+| DfuSe layout string | `@Internal Flash /0x08003000/29*004Kg` (generated at run time) |
 
 `BOOT_PARTITION_SIZE` / `BOOT_FLASH_SIZE` live in `shared/boot_protocol.h`; the total
 flash size can be overridden with `-DBOOT_FLASH_SIZE=<bytes>` (e.g. CH32V307 = 288 KB).
@@ -127,7 +127,8 @@ cmake --build --preset ch32v30x_ob-debug    # build
 | `ch32v30x_ob-release` | Release (logging off, smaller) | `build/ch32v30x_ob-release/` |
 
 Artifacts: `<output dir>/ch32_dfu_boot.elf | .hex | .bin`
-(Debug ≈ 14.4 KB, Release ≈ 10.0 KB, out of the 32 KB partition).
+(Debug ≈ 14.4 KB, Release ≈ 10.0 KB; the Release image has to fit the 12 KB
+bootloader partition - the Debug build does not and fails to link on purpose).
 
 ### What is in the image
 
@@ -177,7 +178,7 @@ cmake --build build -j
 #    - any board:           dfu-util -e          (the application's DFU runtime)
 
 # 3) download (DfuSe requires the physical address with -s)
-dfu-util -a 0 -s 0x08008000:leave -D <app.bin>
+dfu-util -a 0 -s 0x08003000:leave -D <app.bin>
 ```
 
 Microsoft OS 1.0 (WCID) descriptors are built in, so `dfu-util` works on Windows
@@ -198,7 +199,7 @@ without a manual driver step.
   its first write to it.
 - **Bootloader protection**: `boot_flash_addr_in_app()` refuses erases and writes
   outside the application partition.
-- **Jump**: `jr 0x8000` from the software-interrupt handler `SW_Handler`.
+- **Jump**: `jr 0x3000` from the software-interrupt handler `SW_Handler`.
 - **USBHS high speed**: `-DCONFIG_USB_HS`.  Note that **CherryUSB master has no
   CH32V30x USBHS port**: its `port/wch/usbhs` targets another USBHS IP
   (CH32V205/V4x7/CH32X305/CH58x) whose register map is completely different from the

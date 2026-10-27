@@ -62,7 +62,7 @@ ch32_dfu_boot/
     ├── dfu_port.c/.h                 # DfuSe → boot_flash_port 适配
     ├── funconfig.h                   # ch32fun 配置（printf、体积开关）
     ├── boot_log.h / usb_config.h
-    └── Link.ld                       # 0x00000000 + 32K
+    └── Link.ld                       # 0x00000000 + 12K
 ```
 
 ---
@@ -86,10 +86,10 @@ ch32_dfu_boot/
 
 | 项目 | 值 |
 | --- | --- |
-| Bootloader | `0x00000000` – `0x00008000`（**32 KB**） |
-| APP | `0x00008000` – 结尾（128 KB flash → 96 KB） |
+| Bootloader | `0x00000000` – `0x00003000`（**12 KB**） |
+| APP | `0x00003000` – 结尾（128 KB flash → 116 KB，按扇区对齐） |
 | DFU 扇区 | 4 KB |
-| DfuSe 布局串 | `@Internal Flash /0x08008000/24*004Kg`（运行时生成） |
+| DfuSe 布局串 | `@Internal Flash /0x08003000/29*004Kg`（运行时生成） |
 
 `BOOT_PARTITION_SIZE` / `BOOT_FLASH_SIZE` 在 `shared/boot_protocol.h`；
 总 flash 可用 `-DBOOT_FLASH_SIZE=<bytes>` 覆盖（如 CH32V307 = 288 KB）。
@@ -114,7 +114,8 @@ cmake --build --preset ch32v30x_ob-debug    # 编译
 | `ch32v30x_ob-release` | Release（日志关闭，体积更小） | `build/ch32v30x_ob-release/` |
 
 产物：`<输出目录>/ch32_dfu_boot.elf | .hex | .bin`
-（Debug ≈ 14.4 KB，Release ≈ 10.0 KB，分区 32 KB）。
+（Debug ≈ 14.4 KB，Release ≈ 10.0 KB；Release 必须放进 12 KB 的 bootloader 分区，
+Debug 版放不进去，会故意链接失败）。
 
 ### 镜像里有什么
 
@@ -160,7 +161,7 @@ cmake --build build -j
 #    - 任意板：  dfu-util -e          （APP 的 DFU runtime 触发）
 
 # 3) 下载（DfuSe 必须带 -s 物理地址）
-dfu-util -a 0 -s 0x08008000:leave -D <app.bin>
+dfu-util -a 0 -s 0x08003000:leave -D <app.bin>
 ```
 
 Windows 下已内置 MS OS 1.0 (WCID) 描述符，正常情况下 `dfu-util` 可直接使用。
@@ -177,7 +178,7 @@ Windows 下已内置 MS OS 1.0 (WCID) 描述符，正常情况下 `dfu-util` 可
   负责 WCH 快速页擦写（页 256 B，每次擦写前后 `RCC_HPRE_DIV2`）。
   即使主机不发 ERASE，DFU 端口也会在首次写入某扇区时自动擦除。
 - **Bootloader 保护**：`boot_flash_addr_in_app()` 拒绝应用分区之外的擦写。
-- **跳转**：软件中断 `SW_Handler` 中 `jr 0x8000`。
+- **跳转**：软件中断 `SW_Handler` 中 `jr 0x3000`。
 - **USBHS 高速**：`-DCONFIG_USB_HS`。注意 **CherryUSB master 没有 CH32V30x USBHS 端口**：
   它的 `port/wch/usbhs` 面向另一套 USBHS IP（CH32V205/V4x7/CH32X305/CH58x），寄存器映射与
   CH32V30x 的 `USBHSD` 完全不同（连 `R8_USB_CTRL` 的位定义都不一样），而 master 里

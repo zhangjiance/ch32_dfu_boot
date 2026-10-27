@@ -12,12 +12,13 @@ MEMORY
    FLASH + RAM options (see CH32FV2x_V3xRM Table 32-3):
      192K/128K, 224K/96K, 256K/64K, 288K/32K, 128K/192K
 
-   DFU bootloader partition: the first 32 KB (BOOT_PARTITION_SIZE in
-   shared/boot_protocol.h).  The application links at 0x00008000 with the
+   DFU bootloader partition: the first 12 KB (BOOT_PARTITION_SIZE in
+   shared/boot_protocol.h).  The application links at 0x00003000 with the
    remaining flash.  Sizing the region here makes the link fail loudly if the
    bootloader ever outgrows the partition instead of silently overlapping the
-   application. */
-	FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 32K
+   application (the release image is ~9.7 KB, so there is ~2.3 KB of headroom;
+   a Debug build with logging does not fit and is not meant to be flashed). */
+	FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 12K
 	RAM (xrw) : ORIGIN = 0x20000000, LENGTH = 32K
 }
 
