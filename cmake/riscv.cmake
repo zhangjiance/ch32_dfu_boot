@@ -1,10 +1,22 @@
 # ==============================================================================
-# Toolchain and flags for the CH32V30x DFU bootloader (ch32fun based)
+# Toolchain and flags for the CH32 DFU bootloader (ch32fun based)
 #
 # There is no vendor startup file and no vendor library: ch32fun.c brings
 # handle_reset() and the vector table (in .init, at address 0), which is why the
 # entry point is InterruptVector rather than a _start stub.
+#
+# The ISA string is a chip property and comes from the chip port
+# (CHIP_MARCH in port/<chip>/port.cmake):
+#   CH32V30x  -> rv32imacxw  (the "xw" extension is the WCH fast-entry ISA
+#                             every handler in that port is written for)
+#   CH32L103  -> rv32imac    (the L103 core has no "xw"; its handlers use the
+#                             WCH compiler's interrupt attribute, which does not
+#                             need the extension, only HPE enabled at run time)
 # ==============================================================================
+if(NOT DEFINED CHIP_MARCH)
+    set(CHIP_MARCH "rv32imacxw")
+endif()
+
 set(CMAKE_SYSTEM_NAME               Generic)
 
 set(CMAKE_C_COMPILER_FORCED TRUE)
@@ -38,13 +50,10 @@ add_compile_options(
         -Wuninitialized
 )
 
-# -march=rv32imacxw: the "xw" extension is what makes the WCH fast interrupt
-# entry (INTERRUPT_DECORATOR with FUNCONF_ENABLE_HPE) and the hardware prologue
-# painless, and every handler here uses that form.
-add_compile_options(-march=rv32imacxw -mabi=ilp32)
+add_compile_options(-march=${CHIP_MARCH} -mabi=ilp32)
 
 add_link_options(
-        -march=rv32imacxw -mabi=ilp32
+        -march=${CHIP_MARCH} -mabi=ilp32
         -msmall-data-limit=8 -msave-restore
         -nostartfiles
         -Xlinker

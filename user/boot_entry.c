@@ -68,7 +68,8 @@ void boot_check_and_run_app(void)
         return;
     }
 #else
-    BOOT_PRINTF("[BOOT] board has no boot button\r\n");
+    /* Either no button, or one wired to BOOT0, which firmware cannot read. */
+    BOOT_PRINTF("[BOOT] board has no readable boot button\r\n");
 #endif
 
     if (boot_trigger_check_and_clear()) {

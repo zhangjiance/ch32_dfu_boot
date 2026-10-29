@@ -1,10 +1,14 @@
 /*
  * ch32_dfu_desc.c
  *
- * USB DFU descriptors + init for the CH32V30x DFU bootloader.
+ * USB DFU descriptors + init for the CH32 DFU bootloader.
  *
  * DfuSe with a single alternate setting, plus MS OS 1.0/WCID descriptors so
  * Windows binds WinUSB to the DFU interface.
+ *
+ * The strings name the chip through BOOT_CHIP_NAME and the serial number comes
+ * from the ESIG unique ID at BOOT_UID_BASE; both are chip-port properties
+ * (port/<chip>/port.cmake), so nothing here has to change for a new part.
  */
 #include "usbd_core.h"
 #include "usbd_dfu.h"
@@ -15,6 +19,13 @@
 #include "boot_flash_port.h"
 #include "dfu_port.h"
 #include "usb_config.h"
+
+#ifndef BOOT_CHIP_NAME
+#define BOOT_CHIP_NAME "CH32"
+#endif
+#ifndef BOOT_UID_BASE
+#define BOOT_UID_BASE 0x1FFFF7E8UL
+#endif
 
 /* DFU interface (9) + functional descriptor (9) */
 #define DFU_DESC_TOTAL_LEN (9 + 9)
@@ -77,7 +88,7 @@ static char *put_dec3(char *p, uint32_t v)
     return p;
 }
 
-/* Serial number from the CH32V30x unique id (0x1FFFF7E8), filled at init. */
+/* Serial number from the ESIG unique id, filled at init. */
 static char serial_string[25];
 
 /* ------------------------------------------------------------------ *
@@ -131,7 +142,7 @@ static const uint8_t *device_quality_descriptor_cb(uint8_t speed)
 static void build_serial_string(void)
 {
     static const char hex[] = "0123456789ABCDEF";
-    const uint8_t *uid = (const uint8_t *)0x1FFFF7E8UL;
+    const uint8_t *uid = (const uint8_t *)BOOT_UID_BASE;
     uint32_t i;
 
     for (i = 0U; i < 12U; i++) {
@@ -143,8 +154,8 @@ static void build_serial_string(void)
 
 static const char *string_descriptors[] = {
     (const char[]){ 0x09, 0x04 },   /* Langid 0x0409 */
-    "CH32V30x",                     /* Manufacturer */
-    "CH32V30x DFU Bootloader",      /* Product */
+    BOOT_CHIP_NAME,                 /* Manufacturer */
+    BOOT_CHIP_NAME " DFU Bootloader", /* Product */
     serial_string,                  /* Serial number */
     flash_desc_str,                 /* iInterface 4: DfuSe memory layout */
 };

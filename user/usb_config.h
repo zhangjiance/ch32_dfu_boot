@@ -1,8 +1,12 @@
 /*
  * usb_config.h
  *
- * CherryUSB (latest, port/wch/usbhs) configuration for the CH32V30x DFU
- * bootloader.  Device-only, DFU class, USBHS high speed.
+ * CherryUSB configuration for the CH32 DFU bootloader.  Device-only, DFU class.
+ *
+ * The controller and its speed are chip-port properties and are selected by
+ * port/<chip>/port.cmake, not here:
+ *   CH32V30x  USBHS, high speed  -> -DCONFIG_USB_HS, port/wch/ch32v30x driver
+ *   CH32L103  USBFS, full speed  -> no CONFIG_USB_HS, port/wch/usbfs driver
  */
 #ifndef USB_CONFIG_H
 #define USB_CONFIG_H
@@ -14,7 +18,7 @@
 #define CONFIG_USB_DBG_LEVEL   USB_DBG_ERROR
 #define CONFIG_USB_ALIGN_SIZE  4
 
-/* CH32V30x has no data cache: DMA buffers can live in normal RAM. */
+/* Neither part has a data cache: DMA buffers can live in normal RAM. */
 #define USB_NOCACHE_RAM_SECTION
 
 /* ================= device ================= */
