@@ -24,19 +24,23 @@
  *   RGB LED     : PB8 (red), PB6 (blue), PB7 (green) through series resistors to
  *                 VDD_3V3, so a low pin lights that colour
  *   USART1      : PA9 (TX) / PA10 (RX), on the pin header
+ *   user button : PA0 (WKUP) to GND, active low - hold at power-up to stay in DFU
  *   SWD/JTAG    : PA13 (SWDIO) / PA14 (SWCLK), PA4..PA7 = TDO/TDI/TCK/DIO
  *
- * There is no user button and no CAN transceiver on this board.
+ * There is no CAN transceiver on this board.
  */
 #ifndef BOARD_CONFIG_H
 #define BOARD_CONFIG_H
 
 #define BOARD_NAME              "ch32l103_ob"
 
-/* ---- user button ----
- * None: DFU is entered through the application detach path (dfu-util -e), or by
- * the bootloader's own decision when the application image is missing. */
-#define BOARD_HAS_BOOT_BUTTON   0
+/* ---- user button: PA0 (WKUP) to GND, internal pull-up, active low ----
+ * Hold it while powering up and the bootloader stays in DFU instead of jumping
+ * to the application; hold it while the application runs and the application
+ * requests DFU mode and resets. */
+#define BOARD_HAS_BOOT_BUTTON   1
+#define BOARD_BOOT_PIN          PA0
+#define BOARD_BOOT_ACTIVE_LOW   1
 
 /* ---- RGB LED: three discrete LEDs, not an addressable part ----
  * Board order is red / blue / green, which the board layer exposes as
