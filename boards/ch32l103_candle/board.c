@@ -71,30 +71,30 @@ static void board_init_led(void)
 
     funPinMode(BOARD_LED_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
 }
-#if BOARD_HAS_LED2
+#if BOARD_HAS_LED1
 /* Second LED (LED2).  Same off-level convention as LED1; a board whose second
- * LED has the opposite polarity overrides it with BOARD_LED2_ACTIVE_LOW. */
-#ifndef BOARD_LED2_ACTIVE_LOW
-#define BOARD_LED2_ACTIVE_LOW BOARD_LED_ACTIVE_LOW
+ * LED has the opposite polarity overrides it with BOARD_LED1_ACTIVE_LOW. */
+#ifndef BOARD_LED1_ACTIVE_LOW
+#define BOARD_LED1_ACTIVE_LOW BOARD_LED_ACTIVE_LOW
 #endif
 
-static uint8_t led2_level(uint8_t on)
+static uint8_t led1_level(uint8_t on)
 {
-    return BOARD_LED2_ACTIVE_LOW ? (uint8_t)!on : on;
+    return BOARD_LED1_ACTIVE_LOW ? (uint8_t)!on : on;
 }
 
-static void board_init_led2(void)
+static void board_init_led1(void)
 {
     RCC->APB2PCENR |= BOARD_GPIO_RCC;
 
     /* Preload the off level before the pin becomes an output, so the LED does
      * not flash on at boot.  Without this the second LED stays an input and the
      * application's TX/RX indicators never light. */
-    funDigitalWrite(BOARD_LED2_PIN, led2_level(0U) ? FUN_HIGH : FUN_LOW);
+    funDigitalWrite(BOARD_LED1_PIN, led1_level(0U) ? FUN_HIGH : FUN_LOW);
 
-    funPinMode(BOARD_LED2_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
+    funPinMode(BOARD_LED1_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
 }
-#endif /* BOARD_HAS_LED2 */
+#endif /* BOARD_HAS_LED1 */
 #endif /* BOARD_HAS_LED */
 
 void board_led_write(uint8_t state)
@@ -118,44 +118,45 @@ void board_led_toggle(void)
 #endif
 }
 
+void board_led1_write(uint8_t state)
+{
+#if BOARD_HAS_LED1
+    const uint8_t level = led1_level((state != 0U) ? 1U : 0U);
+
+    funDigitalWrite(BOARD_LED1_PIN, level ? FUN_HIGH : FUN_LOW);
+#else
+    (void)state;
+#endif
+}
+
+#if BOARD_HAS_LED2
+/* Third LED of the board, i.e. LED2 of the API (BOARD_LED2_*).  A board with
+ * three discrete LEDs uses the trio as an RGB indicator; the pin-to-colour
+ * mapping lives in board_config.h. */
+#ifndef BOARD_LED2_ACTIVE_LOW
+#define BOARD_LED2_ACTIVE_LOW BOARD_LED_ACTIVE_LOW
+#endif
+
+static uint8_t led2_level(uint8_t on)
+{
+    return BOARD_LED2_ACTIVE_LOW ? (uint8_t)!on : on;
+}
+
+static void board_init_led2(void)
+{
+    RCC->APB2PCENR |= BOARD_GPIO_RCC;
+
+    funDigitalWrite(BOARD_LED2_PIN, led2_level(0U) ? FUN_HIGH : FUN_LOW);
+    funPinMode(BOARD_LED2_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
+}
+#endif /* BOARD_HAS_LED2 */
+
 void board_led2_write(uint8_t state)
 {
 #if BOARD_HAS_LED2
     const uint8_t level = led2_level((state != 0U) ? 1U : 0U);
 
     funDigitalWrite(BOARD_LED2_PIN, level ? FUN_HIGH : FUN_LOW);
-#else
-    (void)state;
-#endif
-}
-
-#if BOARD_HAS_LED3
-/* Third LED (LED3).  Boards with three discrete LEDs use the trio as an RGB
- * indicator; the mapping (which pin is which colour) lives in board_config.h. */
-#ifndef BOARD_LED3_ACTIVE_LOW
-#define BOARD_LED3_ACTIVE_LOW BOARD_LED_ACTIVE_LOW
-#endif
-
-static uint8_t led3_level(uint8_t on)
-{
-    return BOARD_LED3_ACTIVE_LOW ? (uint8_t)!on : on;
-}
-
-static void board_init_led3(void)
-{
-    RCC->APB2PCENR |= BOARD_GPIO_RCC;
-
-    funDigitalWrite(BOARD_LED3_PIN, led3_level(0U) ? FUN_HIGH : FUN_LOW);
-    funPinMode(BOARD_LED3_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
-}
-#endif /* BOARD_HAS_LED3 */
-
-void board_led3_write(uint8_t state)
-{
-#if BOARD_HAS_LED3
-    const uint8_t level = led3_level((state != 0U) ? 1U : 0U);
-
-    funDigitalWrite(BOARD_LED3_PIN, level ? FUN_HIGH : FUN_LOW);
 #else
     (void)state;
 #endif
@@ -309,11 +310,11 @@ void board_init(void)
 #if BOARD_HAS_LED
     board_init_led();
 #endif
+#if BOARD_HAS_LED1
+    board_init_led1();
+#endif
 #if BOARD_HAS_LED2
     board_init_led2();
-#endif
-#if BOARD_HAS_LED3
-    board_init_led3();
 #endif
 #if BOARD_HAS_TERMINATION
     board_init_termination();

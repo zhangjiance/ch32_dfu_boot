@@ -35,13 +35,13 @@ uint32_t board_time_ms(void);
 void board_delay_ms(uint32_t ms);
 
 /* Status LED primitives: state != 0 means "LED on", and every one of them is a
- * no-op on a board that has no such LED (BOARD_HAS_LED / _LED2 / _LED3).  A board
+ * no-op on a board that has no such LED (BOARD_HAS_LED / _LED1 / _LED2).  A board
  * with three LEDs (an RGB indicator, say) exposes the colours through these:
  * the pin-to-colour mapping is in board_config.h. */
 void board_led_write(uint8_t state);
 void board_led_toggle(void);
+void board_led1_write(uint8_t state);
 void board_led2_write(uint8_t state);
-void board_led3_write(uint8_t state);
 
 /* CAN transceiver termination (120 ohm switch): on = true engages it.  No-op
  * on boards without one (BOARD_HAS_TERMINATION 0). */

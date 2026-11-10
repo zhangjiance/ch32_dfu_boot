@@ -44,16 +44,16 @@
 /* ---- RGB LED: three discrete LEDs, not an addressable part ----
  * PB14 = red, PB13 = blue, PB15 = green, each with its own series resistor to
  * VDD_3V3, so a low pin lights that colour.  Applications drive them through
- * board_led_write() / board_led2_write() / board_led3_write(), in this order:
- *      LED1 = red, LED2 = blue, LED3 = green
+ * board_led_write() / board_led1_write() / board_led2_write(), in this order:
+ *      LED = red, LED1 = blue, LED2 = green
  * Mixing them gives the usual colours (red+green = yellow, all three = white). */
 #define BOARD_HAS_LED           1
 #define BOARD_LED_PIN           PB14        /* red   */
 #define BOARD_LED_ACTIVE_LOW    1
+#define BOARD_HAS_LED1          1
+#define BOARD_LED1_PIN          PB13        /* blue  */
 #define BOARD_HAS_LED2          1
-#define BOARD_LED2_PIN          PB13        /* blue  */
-#define BOARD_HAS_LED3          1
-#define BOARD_LED3_PIN          PB15        /* green */
+#define BOARD_LED2_PIN          PB15        /* green */
 
 /* ---- application UART ----
  * The board's UART for application traffic; board_init_app_uart() sets up the

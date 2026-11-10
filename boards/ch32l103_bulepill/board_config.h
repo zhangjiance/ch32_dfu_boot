@@ -46,20 +46,22 @@
 #define BOARD_HAS_BOOT_BUTTON   0
 
 /* ---- LEDs ----
- * Driven high to light up (see the schematic note above).
- *   BOARD_LED_*  is the status LED the bootloader toggles per flash block.
- *   LED2/LED3    are the other two GPIO LEDs of the board; they are described
- *                here because board_config.h is the board's fact sheet, but
- *                nothing in this project drives them. */
+ * Driven high to light up (see the schematic note above).  The three are the
+ * board's silkscreen LED1 (D4), LED2 (D5) and LED3 (D6), in that order:
+ *   BOARD_LED_*   = D4, the status LED the bootloader toggles per flash block
+ *   BOARD_LED1_*  = D5
+ *   BOARD_LED2_*  = D6
+ * The last two are documented here because board_config.h is the board's fact
+ * sheet; nothing in this project drives them. */
 #define BOARD_HAS_LED           1
 #define BOARD_LED_PIN           PB11
 #define BOARD_LED_ACTIVE_LOW    0
 
-#define BOARD_HAS_LED2          1
-#define BOARD_LED2_PIN          PB10
+#define BOARD_HAS_LED1          1
+#define BOARD_LED1_PIN          PB10
 
-#define BOARD_HAS_LED3          1
-#define BOARD_LED3_PIN          PB2
+#define BOARD_HAS_LED2          1
+#define BOARD_LED2_PIN          PB2
 
 /* ---- CAN pins ----
  * PB8/PB9 are the CAN pins of this board (the bluepill header routing); the

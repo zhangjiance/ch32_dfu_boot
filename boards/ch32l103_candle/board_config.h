@@ -55,15 +55,16 @@
 #define BOARD_HAS_BOOT_BUTTON   0
 
 /* ---- LEDs ----
- * The bootloader drives LED1 as its status LED (toggled per flash block).
+ * The bootloader drives the silkscreen LED1 (PA0) as its status LED, i.e.
+ * BOARD_LED_*; BOARD_LED1_* is the board's second LED.
  * BOARD_LED_ACTIVE_LOW: 1 = LED on when the pin is low (LED to 3V3 through a
  * resistor, pin sinks the current). */
 #define BOARD_HAS_LED           1
 #define BOARD_LED_PIN           PA0
 #define BOARD_LED_ACTIVE_LOW    1
 
-#define BOARD_HAS_LED2          1
-#define BOARD_LED2_PIN          PA1
+#define BOARD_HAS_LED1          1
+#define BOARD_LED1_PIN          PA1
 
 /* ---- CAN transceiver termination ----
  * PA2 drives the 120 ohm switch; active low means "termination engaged".
