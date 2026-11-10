@@ -23,38 +23,48 @@
  * (ch32v30xhw.h: PA5, PB10, ...); board.c turns that into the CFGLR/BSHR
  * writes.
  *
- *   BOOT button : PA6 to GND, internal pull-up, active low
- *   status LED  : PA5, active low
- *   app UART    : USART3, PB10 (TX) / PB11 (RX)
+ *   USB         : D+ = PA11 (UDP), D- = PA12 (UDM) - dedicated USBFS pins
+ *   RGB LED     : PB14 (red), PB13 (blue), PB15 (green), each through 2k2 to
+ *                 VDD_3V3, so all three are active low
+ *   user button : PC13 to GND (switch SW-PB4P), active low
+ *   UART1       : PA9 (TX) / PA10 (RX), broken out on the pin header
  */
 #ifndef BOARD_CONFIG_H
 #define BOARD_CONFIG_H
 
 #define BOARD_NAME              "ch32l103_ob"
 
-/* ---- BOOT button: PA6 to GND, pull-up, active low ----
+/* ---- user button: PC13 to GND, pull-up, active low ----
  * Set BOARD_HAS_BOOT_BUTTON to 0 on a board without a button: DFU is then
  * entered only through the application detach path (dfu-util -e). */
 #define BOARD_HAS_BOOT_BUTTON   1
-#define BOARD_BOOT_PIN          PA6
+#define BOARD_BOOT_PIN          PC13
 #define BOARD_BOOT_ACTIVE_LOW   1
 
-/* ---- status LED: PA5 (plain GPIO, no JTAG remap needed) ----
- * BOARD_LED_ACTIVE_LOW: 1 = LED on when the pin is low. */
+/* ---- RGB LED: three discrete LEDs, not an addressable part ----
+ * PB14 = red, PB13 = blue, PB15 = green, each with its own series resistor to
+ * VDD_3V3, so a low pin lights that colour.  Applications drive them through
+ * board_led_write() / board_led2_write() / board_led3_write(), in this order:
+ *      LED1 = red, LED2 = blue, LED3 = green
+ * Mixing them gives the usual colours (red+green = yellow, all three = white). */
 #define BOARD_HAS_LED           1
-#define BOARD_LED_PIN           PA5
+#define BOARD_LED_PIN           PB14        /* red   */
 #define BOARD_LED_ACTIVE_LOW    1
+#define BOARD_HAS_LED2          1
+#define BOARD_LED2_PIN          PB13        /* blue  */
+#define BOARD_HAS_LED3          1
+#define BOARD_LED3_PIN          PB15        /* green */
 
 /* ---- application UART ----
  * The board's UART for application traffic; board_init_app_uart() sets up the
  * instance and the two pins.  The images shipped in this project never call
  * it, so it only has to be right for boards that do. */
 #define BOARD_HAS_APP_UART        1
-#define BOARD_APP_UART            USART3
-#define BOARD_APP_UART_RCC        RCC_APB1Periph_USART3
+#define BOARD_APP_UART            USART1
+#define BOARD_APP_UART_RCC        RCC_APB2Periph_USART1
 #define BOARD_APP_UART_BAUDRATE   115200
-#define BOARD_APP_UART_TX_PIN     PB10
-#define BOARD_APP_UART_RX_PIN     PB11
+#define BOARD_APP_UART_TX_PIN     PA9
+#define BOARD_APP_UART_RX_PIN     PA10
 
 /* ---- USB kernel clock ----
  * The USBFS cell wants 48 MHz.  With this board's 72 MHz core (board.cmake)
@@ -64,7 +74,7 @@
 
 /* ---- GPIO port clocks this board needs ----
  * RCC->APB2PCENR bits, one per port named above. */
-#define BOARD_GPIO_RCC  (RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB)
+#define BOARD_GPIO_RCC  (RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC)
 
 /* ---- periodic tick ----
  * BOARD_TICK_TIM_ISR has to be the handler name ch32fun's vector table uses

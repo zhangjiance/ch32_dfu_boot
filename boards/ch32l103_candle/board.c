@@ -118,6 +118,51 @@ void board_led_toggle(void)
 #endif
 }
 
+void board_led2_write(uint8_t state)
+{
+#if BOARD_HAS_LED2
+    const uint8_t level = led2_level((state != 0U) ? 1U : 0U);
+
+    funDigitalWrite(BOARD_LED2_PIN, level ? FUN_HIGH : FUN_LOW);
+#else
+    (void)state;
+#endif
+}
+
+#if BOARD_HAS_LED3
+/* Third LED (LED3).  Boards with three discrete LEDs use the trio as an RGB
+ * indicator; the mapping (which pin is which colour) lives in board_config.h. */
+#ifndef BOARD_LED3_ACTIVE_LOW
+#define BOARD_LED3_ACTIVE_LOW BOARD_LED_ACTIVE_LOW
+#endif
+
+static uint8_t led3_level(uint8_t on)
+{
+    return BOARD_LED3_ACTIVE_LOW ? (uint8_t)!on : on;
+}
+
+static void board_init_led3(void)
+{
+    RCC->APB2PCENR |= BOARD_GPIO_RCC;
+
+    funDigitalWrite(BOARD_LED3_PIN, led3_level(0U) ? FUN_HIGH : FUN_LOW);
+    funPinMode(BOARD_LED3_PIN, GPIO_CFGLR_OUT_10Mhz_PP);
+}
+#endif /* BOARD_HAS_LED3 */
+
+void board_led3_write(uint8_t state)
+{
+#if BOARD_HAS_LED3
+    const uint8_t level = led3_level((state != 0U) ? 1U : 0U);
+
+    funDigitalWrite(BOARD_LED3_PIN, level ? FUN_HIGH : FUN_LOW);
+#else
+    (void)state;
+#endif
+}
+
+/* -------------------------------------------------------------------------- */
+/* CAN transceiver termination                                                */
 /* -------------------------------------------------------------------------- */
 /* CAN transceiver termination                                                */
 /* -------------------------------------------------------------------------- */
@@ -266,6 +311,9 @@ void board_init(void)
 #endif
 #if BOARD_HAS_LED2
     board_init_led2();
+#endif
+#if BOARD_HAS_LED3
+    board_init_led3();
 #endif
 #if BOARD_HAS_TERMINATION
     board_init_termination();
