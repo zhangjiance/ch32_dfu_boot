@@ -83,6 +83,26 @@
                 "CHIP_PORT": "ch32l103"
             },
             "binaryDir": "${sourceDir}/build/ch32l103_bulepill-debug"
+        },
+        {
+            "name": "ch32l103_ob-release",
+            "displayName": "CH32L103 OB (internal oscillator) - Release",
+            "inherits": "base",
+            "cacheVariables": {
+                "BOARD": "ch32l103_ob",
+                "CHIP_PORT": "ch32l103"
+            },
+            "binaryDir": "${sourceDir}/build/ch32l103_ob-release"
+        },
+        {
+            "name": "ch32l103_ob-debug",
+            "displayName": "CH32L103 OB (internal oscillator) - Debug",
+            "inherits": "base-debug",
+            "cacheVariables": {
+                "BOARD": "ch32l103_ob",
+                "CHIP_PORT": "ch32l103"
+            },
+            "binaryDir": "${sourceDir}/build/ch32l103_ob-debug"
         }
     ],
     "buildPresets": [
@@ -114,6 +134,16 @@
         {
             "name": "ch32l103_bulepill-debug",
             "configurePreset": "ch32l103_bulepill-debug",
+            "jobs": 8
+        },
+        {
+            "name": "ch32l103_ob-release",
+            "configurePreset": "ch32l103_ob-release",
+            "jobs": 8
+        },
+        {
+            "name": "ch32l103_ob-debug",
+            "configurePreset": "ch32l103_ob-debug",
             "jobs": 8
         }
     ]

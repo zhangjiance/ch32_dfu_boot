@@ -13,8 +13,10 @@
  *
  * CH32L103 facts (WCH EVT USBFS device examples, ch32l103hw.h):
  *   - the USBFS cell needs its AHB clock enabled (RCC_AHBPeriph_USBFS)
- *   - the USB clock must be 48 MHz: with SYSCLK = PLL = 96 MHz that is PLL / 2,
- *     i.e. CFGR0.USBPRE = 01
+ *   - the USB clock must be 48 MHz, taken from the system PLL: with SYSCLK = 96
+ *     MHz (crystal board) that is PLL / 2, with SYSCLK = 72 MHz (internal
+ *     oscillator board) it is PLL / 1.5.  Which one applies is a property of the
+ *     board's clock tree, so it comes from BOARD_USB_PRESCALER
  *   - DP/DM are the dedicated PA12/PA11 USB pins; the controller drives them,
  *     they need no GPIO mode setup
  *   - this is a full-speed cell: no CONFIG_USB_HS for this chip port
@@ -22,6 +24,13 @@
 #include "boot_usb_port.h"
 
 #include "ch32fun.h"
+#include "board_config.h"   /* BOARD_USB_PRESCALER */
+
+/* Boards with a 96 MHz crystal tree keep the /2 they have always used; a board
+ * that runs slower sets its own divider (see boards/ch32l103_ob). */
+#ifndef BOARD_USB_PRESCALER
+#define BOARD_USB_PRESCALER RCC_USBCLKSource_PLLCLK_Div2
+#endif
 
 /* CherryUSB's driver entry point (port/wch/usbfs/usb_dc_usbfs.c). */
 void USBD_IRQHandler(uint8_t busid);
@@ -30,8 +39,8 @@ void usb_dc_low_level_init(uint8_t busid)
 {
     (void)busid;
 
-    /* USB clock = PLL / 2 = 48 MHz at SYSCLK 96 MHz. */
-    RCC->CFGR0 = (RCC->CFGR0 & ~(3U << 22)) | RCC_USBCLKSource_PLLCLK_Div2;
+    /* USB clock = PLL / N, N chosen by the board so it always lands on 48 MHz. */
+    RCC->CFGR0 = (RCC->CFGR0 & ~(3U << 22)) | BOARD_USB_PRESCALER;
 
     /* Enable the USBFS peripheral clock. */
     RCC->AHBPCENR |= RCC_AHBPeriph_USBFS;
