@@ -39,6 +39,9 @@ void board_delay_ms(uint32_t ms);
  * with three LEDs (an RGB indicator, say) exposes the colours through these:
  * the pin-to-colour mapping is in board_config.h. */
 void board_led_write(uint8_t state);
+/* One toggle step for the whole status indication: with a single LED it flips
+ * it, with two or three it walks them (one lit at a time), so a call site that
+ * just calls this in a loop blinks through every LED the board has. */
 void board_led_toggle(void);
 void board_led1_write(uint8_t state);
 void board_led2_write(uint8_t state);

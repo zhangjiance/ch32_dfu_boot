@@ -108,13 +108,61 @@ void board_led_write(uint8_t state)
 #endif
 }
 
+/* How many LEDs this board has, resolved at compile time. */
+#if BOARD_HAS_LED
+#  if BOARD_HAS_LED2
+#    define BOARD_LED_COUNT 3
+#  elif BOARD_HAS_LED1
+#    define BOARD_LED_COUNT 2
+#  else
+#    define BOARD_LED_COUNT 1
+#  endif
+#else
+#  define BOARD_LED_COUNT 0
+#endif
+
+#if BOARD_LED_COUNT > 1
+/* Drive LED n: 0 = BOARD_LED, 1 = BOARD_LED1, 2 = BOARD_LED2.  Only boards with
+ * more than one LED rotate, so only they need the indirection. */
+static void board_led_write_index(uint8_t index, uint8_t state)
+{
+    switch (index) {
+#if BOARD_HAS_LED
+    case 0: board_led_write(state); break;
+#endif
+#if BOARD_HAS_LED1
+    case 1: board_led1_write(state); break;
+#endif
+#if BOARD_HAS_LED2
+    case 2: board_led2_write(state); break;
+#endif
+    default: break;
+    }
+}
+#endif
+
 void board_led_toggle(void)
 {
-#if BOARD_HAS_LED
+#if BOARD_LED_COUNT == 1
+    /* One LED: on/off is all a toggle can mean. */
     static uint8_t on;
 
     on ^= 1U;
     board_led_write(on);
+#elif BOARD_LED_COUNT > 1
+    /* Several LEDs: walk them with exactly one lit at a time, so the single
+     * "toggle" the callers use becomes a rotating indicator.  Two LEDs
+     * alternate, three cycle (on this board: red -> blue -> green). */
+    static uint8_t lit = 0xFFU;         /* 0xFF: nothing lit yet */
+    static uint8_t next;
+
+    if (lit != 0xFFU) {
+        board_led_write_index(lit, 0U);
+    }
+
+    board_led_write_index(next, 1U);
+    lit = next;
+    next = (uint8_t)((next + 1U) % BOARD_LED_COUNT);
 #endif
 }
 
